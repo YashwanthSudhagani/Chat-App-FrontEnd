@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { useRef } from "react";
 import io from "socket.io-client";
+import axios from "axios";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import {
@@ -23,7 +25,6 @@ import {
   CogIcon,
 } from "@heroicons/react/24/solid";
 import Picker from "emoji-picker-react"; // Using emoji-picker-react
-
 
 const chatURL = "https://chat-app-backend-2ph1.onrender.com/api";
 // Socket connection
@@ -78,9 +79,56 @@ const ChatApp = () => {
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const messagesEndRef = useRef(null);
+
+  const userEmail = localStorage.getItem("userEmail");
 
   const handleEmojiPickerHideShow = () => {
     setShowEmojiPicker(!showEmojiPicker);
+  };
+
+  useEffect(() => {
+    if (userEmail) {
+      socket.emit("add-user", userEmail);
+    }
+
+    // Listen for notifications
+    socket.on("new-notification", (notification) => {
+      alert(notification.message); // You can handle notifications however you like
+    });
+
+    return () => {
+      socket.off("new-notification");
+    };
+  }, [userEmail]);
+
+  // Fetch notifications from the backend
+  useEffect(() => {
+    if (userEmail) {
+      fetch(`${chatURL}/notification/notifications/${userEmail}`)
+        .then((res) => res.json())
+        .then((data) => setNotifications(data.notifications))
+        .catch((err) => console.error("Error fetching notifications:", err));
+    }
+  }, [userEmail]);
+
+  const toggleNotifications = () => {
+    setIsNotificationsOpen(!isNotificationsOpen);
+    if (!isNotificationsOpen) {
+      markNotificationsAsRead();
+    }
+  };
+
+  const markNotificationsAsRead = async () => {
+    try {
+      await axios.put(
+        `${chatURL}/notification/notifications/read/${userEmail}`
+      );
+      setUnreadNotifications(0);
+    } catch (err) {
+      console.error("Error marking notifications as read:", err);
+    }
   };
 
   // Fetch available channels dynamically
@@ -109,35 +157,62 @@ const ChatApp = () => {
 
   // Fetch messages dynamically when a channel is selected
   useEffect(() => {
-    if (selectedChannel) {
-      const fetchMessages = async () => {
-        const response = await fetch(
-           `${chatURL}/messages/getmsg`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              from: localStorage.getItem("userId"),
-              to: selectedChannel._id,
-            }),
-          }
-        );
+    if (!selectedChannel) return;
+
+    // Function to fetch messages
+    const fetchMessages = async () => {
+      try {
+        const response = await fetch(`${chatURL}/messages/getmsg`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from: localStorage.getItem("userId"),
+            to: selectedChannel._id,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch messages");
+        }
+
         const data = await response.json();
         setMessages(data);
-      };
+      } catch (error) {
+        console.error("Error fetching messages:", error);
+      }
+    };
 
-      fetchMessages();
-    }
+    // Fetch messages immediately when the channel is selected
+    fetchMessages();
+
+    // Set interval to fetch messages every second
+    const intervalId = setInterval(fetchMessages, 1000);
+
+    // Cleanup interval when the component unmounts or when the selectedChannel changes
+    return () => clearInterval(intervalId);
   }, [selectedChannel]);
 
   // Listen for new messages via Socket.io
   useEffect(() => {
-    socket.on("msg-recieve", ({ msg }) => {
-      setMessages((prev) => [...prev, { fromSelf: false, message: msg }]);
+    socket.on("msg-receive", ({ msg, from }) => {
+      console.log("Received new message from:", from, "Message:", msg);
+
+      // Ensure the message gets added to the correct chat
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { fromSelf: false, message: msg },
+      ]);
     });
 
-    return () => socket.off("msg-recieve");
+    return () => socket.off("msg-receive"); // Clean up listener
   }, []);
+
+  useEffect(() => {
+    // Scroll to the bottom when messages update
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   // Filter channels based on search input
   const filteredChannels = channels.filter((channel) =>
@@ -151,21 +226,44 @@ const ChatApp = () => {
 
   // Send a new message
   const sendMessage = async () => {
-    const from = localStorage.getItem("userId");
-    const to = selectedChannel._id;
-
+    // Ensure that we have either text or an emoji to send
     if (!newMessage.trim() && !emoji) return;
 
-    await fetch(`${chatURL}/messages/addmsg`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from, to, message: newMessage }),
+    // Combine the emoji (if any) with the new message text
+    const finalMessage = newMessage.trim() + emoji;
+
+    // Emit the message immediately via socket.io for real-time update
+    socket.emit("send-msg", {
+      to: selectedChannel._id,
+      msg: finalMessage,
+      from: localStorage.getItem("userId"),
     });
 
-    socket.emit("send-msg", { to, msg: newMessage });
-    setMessages((prev) => [...prev, { fromSelf: true, message: newMessage }]);
+    // Update the local messages state for the current user
+    setMessages((prev) => [...prev, { fromSelf: true, message: finalMessage }]);
+
+    // Clear the message input fields
     setNewMessage("");
-    setEmoji(""); // Reset after sending
+    setEmoji(""); // Reset the emoji state after sending the message
+
+    // Now store the message asynchronously in the database
+    try {
+      const messageData = {
+        from: localStorage.getItem("userId"),
+        to: selectedChannel._id,
+        message: finalMessage,
+      };
+
+      await fetch(`${chatURL}/messages/addmsg`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(messageData),
+      });
+
+      console.log("Message stored in DB");
+    } catch (error) {
+      console.error("Error storing message:", error);
+    }
   };
 
   // Handle emoji selection
@@ -203,7 +301,10 @@ const ChatApp = () => {
         <div className="space-y-6">
           <ChatBubbleLeftRightIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
           <UserGroupIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
-          <BellIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
+          <BellIcon
+            className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
+            onClick={toggleNotifications}
+          />
           <CalendarDaysIcon
             className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
             onClick={toggleCalendar}
@@ -268,6 +369,46 @@ const ChatApp = () => {
           </button>
         </section>
 
+        {isNotificationsOpen && (
+         <div className="absolute inset-y-0 right-0 w-[calc(100%-80px)] bg-white dark:bg-gray-900 flex flex-col p-6 z-50">
+
+            <div className="flex justify-between items-center border-b pb-4 dark:border-gray-600">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
+                Notifications
+              </h3>
+              <button
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                onClick={toggleNotifications}
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {notifications.length === 0 ? (
+                <p className="text-gray-600 dark:text-gray-400">
+                  No notifications yet!
+                </p>
+              ) : (
+                notifications.map((notif) => (
+                  <div
+                    key={notif._id}
+                    className={`py-2 px-4 rounded-md ${ 
+                      notif.read ? "bg-gray-100" : "bg-yellow-100"
+                    }`}
+                  >
+                    <p className="text-gray-800 dark:text-gray-200">
+                      {notif.message}
+                    </p>
+                    <small className="text-gray-500">
+                      {new Date(notif.timestamp).toLocaleString()}
+                    </small>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Chat Section */}
         <div className="flex-1 flex flex-col bg-gradient-to-br from-white to-gray-200 dark:from-gray-900 dark:to-gray-800">
           <header className="px-6 py-4 flex items-center justify-between border-b border-gray-400 dark:border-gray-600">
@@ -291,45 +432,43 @@ const ChatApp = () => {
                 Select a Channel
               </h1>
             )}
-
             {selectedChannel && (
               <div className="flex items-center space-x-3">
                 <button className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
-                  <PhoneIcon className="h-6 w-6 text-blue-500 cursor-pointer"/>
+                  <PhoneIcon className="h-6 w-6 text-blue-500 cursor-pointer" />
                 </button>
                 <button className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
-                  <VideoCameraIcon className="h-6 w-6 text-blue-500 cursor-pointer"/>
+                  <VideoCameraIcon className="h-6 w-6 text-blue-500 cursor-pointer" />
                 </button>
                 <button className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
-                  <UserPlusIcon className="h-6 w-6 text-blue-500 cursor-pointer"/>
+                  <UserPlusIcon className="h-6 w-6 text-blue-500 cursor-pointer" />
                 </button>
                 <button className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
-                  <EllipsisVerticalIcon className="h-6 w-6 text-blue-500 cursor-pointer"/>
+                  <EllipsisVerticalIcon className="h-6 w-6 text-blue-500 cursor-pointer" />
                 </button>
               </div>
             )}
           </header>
           {isCalendarOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-1/3 p-6">
-                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                    Select a Date
-                  </h3>
-                  <Calendar
-                    onChange={handleDateChange}
-                    value={selectedDate}
-                    className="react-calendar"
-                  />
-                  <button
-                    className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-                    onClick={toggleCalendar}
-                  >
-                    Close
-                  </button>
-                </div>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-1/3 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                  Select a Date
+                </h3>
+                <Calendar
+                  onChange={handleDateChange}
+                  value={selectedDate}
+                  className="react-calendar"
+                />
+                <button
+                  className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+                  onClick={toggleCalendar}
+                >
+                  Close
+                </button>
               </div>
-            )}
-
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 p-6 overflow-y-auto">
@@ -357,27 +496,20 @@ const ChatApp = () => {
                 No messages available.
               </p>
             )}
+            <div ref={messagesEndRef} />
           </div>
 
           {/* Input Section */}
           {selectedChannel && (
-            <footer className="p-4 bg-gray-100 dark:bg-gray-700 border-t border-gray-400 dark:border-gray-600">
-              <div className="flex items-center space-x-3 text-gray-400">
+            <footer className="relative p-4 bg-gray-100 dark:bg-gray-700 border-t border-gray-400 dark:border-gray-600">
+              <div className="flex items-center space-x-3">
                 <PhotoIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
                 <MicrophoneIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
                 <FaceSmileIcon
                   className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer"
                   onClick={handleEmojiPickerHideShow}
                 />
-                {showEmojiPicker && (
-                  <div className="absolute bottom-12 left-0 z-10">
-                    <Picker onEmojiClick={handleEmojiclick} />
-                  </div>
-                )}
                 <PlusIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
-              </div>
-
-              <div className="flex items-center mt-2 space-x-3">
                 <input
                   type="text"
                   value={newMessage}
@@ -392,6 +524,11 @@ const ChatApp = () => {
                   <PaperAirplaneIcon className="h-5 w-5" />
                 </button>
               </div>
+              {showEmojiPicker && (
+                <div className="absolute bottom-14 left-10 z-10">
+                  <Picker onEmojiClick={handleEmojiclick} />
+                </div>
+              )}
             </footer>
           )}
         </div>
