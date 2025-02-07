@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
+const chatURL="https://chat-app-backend-2ph1.onrender.com/api"
+
 const VerifyEmail = () => {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -10,7 +12,7 @@ const VerifyEmail = () => {
   useEffect(() => {
     const verifyEmailToken = async () => {
       try {
-        const response = await fetch(`http://localhost:5000/api/auths/verify-email/${token}`, {
+        const response = await fetch(`${chatURL}/auths/verify-email/${token}`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
