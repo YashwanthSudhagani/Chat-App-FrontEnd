@@ -115,21 +115,26 @@ const ChatApp = () => {
 
   const toggleNotifications = () => {
     setIsNotificationsOpen(!isNotificationsOpen);
+    
     if (!isNotificationsOpen) {
       markNotificationsAsRead();
     }
   };
+  
+const markNotificationsAsRead = async () => {
+  try {
+    await axios.put(`${chatURL}/notification/notifications/read/${userEmail}`);
+    
+    // Update the local state to mark all notifications as read
+    setNotifications((prevNotifications) =>
+      prevNotifications.map((notif) => ({ ...notif, read: true }))
+    );
 
-  const markNotificationsAsRead = async () => {
-    try {
-      await axios.put(
-        `${chatURL}/notification/notifications/read/${userEmail}`
-      );
-      setUnreadNotifications(0);
-    } catch (err) {
-      console.error("Error marking notifications as read:", err);
-    }
-  };
+    setUnreadNotifications(0); // Reset unread count
+  } catch (err) {
+    console.error("Error marking notifications as read:", err);
+  }
+};
 
   // Fetch available channels dynamically
   useEffect(() => {
@@ -371,7 +376,6 @@ const ChatApp = () => {
 
         {isNotificationsOpen && (
          <div className="absolute inset-y-0 right-0 w-[calc(100%-80px)] bg-white dark:bg-gray-900 flex flex-col p-6 z-50">
-
             <div className="flex justify-between items-center border-b pb-4 dark:border-gray-600">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
                 Notifications
