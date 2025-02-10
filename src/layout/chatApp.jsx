@@ -23,6 +23,9 @@ import {
   MoonIcon,
   ArrowUpOnSquareIcon,
   CogIcon,
+  PencilIcon,
+  TrashIcon,
+  ChevronUpIcon,
 } from "@heroicons/react/24/solid";
 import Picker from "emoji-picker-react"; // Using emoji-picker-react
 
@@ -81,6 +84,8 @@ const ChatApp = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const messagesEndRef = useRef(null);
+  const [hoveredMessage, setHoveredMessage] = useState(null);
+  const [dropdownMessage, setDropdownMessage] = useState(null);
 
   const userEmail = localStorage.getItem("userEmail");
 
@@ -289,6 +294,34 @@ const markNotificationsAsRead = async () => {
     setIsCalendarOpen(false); // Close the calendar modal after selecting a date
     console.log("Selected Date:", date); // For debugging
   }; // Call this when the user comes online or changes channel
+
+  // const handleEditMessage = async (messageId, text) => {
+  //   try {
+  //     const res = await fetch(`/api/messages/${messageId}`, {
+  //       method: "PUT",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ text }),
+  //     });
+  //     if (res.ok) {
+  //       setEditMessageId(null);
+  //     }
+  //   } catch (err) {
+  //     console.error("Error updating message:", err);
+  //   }
+  // };
+
+  // const handleDeleteMessage = async (messageId) => {
+  //   try {
+  //     const res = await fetch(`/api/messages/${messageId}`, {
+  //       method: "DELETE",
+  //     });
+  //     if (res.ok) {
+  //       console.log("Message deleted successfully");
+  //     }
+  //   } catch (err) {
+  //     console.error("Error deleting message:", err);
+  //   }
+  // };
 
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
