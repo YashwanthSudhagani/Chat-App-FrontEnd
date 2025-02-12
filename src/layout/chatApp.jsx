@@ -86,6 +86,7 @@ const ChatApp = () => {
   const messagesEndRef = useRef(null);
   const [hoveredMessage, setHoveredMessage] = useState(null);
   const [dropdownMessage, setDropdownMessage] = useState(null);
+  const [editMessageId, setEditMessageId] = useState(null);
 
   const userEmail = localStorage.getItem("userEmail");
 
@@ -295,33 +296,33 @@ const markNotificationsAsRead = async () => {
     console.log("Selected Date:", date); // For debugging
   }; // Call this when the user comes online or changes channel
 
-  // const handleEditMessage = async (messageId, text) => {
-  //   try {
-  //     const res = await fetch(`/api/messages/${messageId}`, {
-  //       method: "PUT",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ text }),
-  //     });
-  //     if (res.ok) {
-  //       setEditMessageId(null);
-  //     }
-  //   } catch (err) {
-  //     console.error("Error updating message:", err);
-  //   }
-  // };
+  const handleEditMessage = async (messageId, text) => {
+    try {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        setEditMessageId(null);
+      }
+    } catch (err) {
+      console.error("Error updating message:", err);
+    }
+  };
 
-  // const handleDeleteMessage = async (messageId) => {
-  //   try {
-  //     const res = await fetch(`/api/messages/${messageId}`, {
-  //       method: "DELETE",
-  //     });
-  //     if (res.ok) {
-  //       console.log("Message deleted successfully");
-  //     }
-  //   } catch (err) {
-  //     console.error("Error deleting message:", err);
-  //   }
-  // };
+  const handleDeleteMessage = async (messageId) => {
+    try {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        console.log("Message deleted successfully");
+      }
+    } catch (err) {
+      console.error("Error deleting message:", err);
+    }
+  };
 
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
@@ -402,7 +403,7 @@ const markNotificationsAsRead = async () => {
               </li>
             ))}
           </ul>
-          <button className="w-full mt-96 justify-center bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+          <button className="w-full mt-auto justify-center bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
             Invite
           </button>
         </section>
@@ -508,33 +509,72 @@ const markNotificationsAsRead = async () => {
           )}
 
           {/* Messages */}
-          <div className="flex-1 p-6 overflow-y-auto">
-            {selectedChannel ? (
-              messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${
-                    msg.fromSelf ? "justify-end" : "justify-start"
-                  } mb-4`}
-                >
-                  <div
-                    className={`p-3 rounded-lg shadow-md max-w-xs ${
-                      msg.fromSelf
-                        ? "bg-blue-400 text-white"
-                        : "bg-white dark:bg-gray-700"
-                    }`}
-                  >
-                    <p>{msg.message}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">
-                No messages available.
-              </p>
+         <div className="flex-1 p-6 overflow-y-auto">
+  {selectedChannel ? (
+    messages.map((msg) => {
+      const isHovered = hoveredMessage === msg._id;
+      const isDropdownOpen = dropdownMessage === msg._id;
+
+      return (
+        <div
+          key={msg._id}
+          className={`flex ${msg.fromSelf ? "justify-end" : "justify-start"} mb-4 relative`}
+          onMouseEnter={() => setHoveredMessage(msg._id)} // Show arrow on hover
+          onMouseLeave={() => setHoveredMessage(null)} // Hide on leave
+        >
+          {/* Message Bubble */}
+          <div className={`p-3 rounded-lg shadow-md max-w-xs relative ${msg.fromSelf ? "bg-blue-400 text-white" : "bg-white dark:bg-gray-700"}`}>
+            <p>{msg.message}</p>
+
+            {/* Show Up Arrow on Hover (Only for the Hovered Message) */}
+            {isHovered && msg.fromSelf && (
+              <button
+                className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDropdownMessage(isDropdownOpen ? null : msg._id); // Toggle dropdown for this message only
+                }}
+              >
+                <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+              </button>
             )}
-            <div ref={messagesEndRef} />
           </div>
+
+          {/* Dropdown Popup (Only for the Clicked Message) */}
+          {isDropdownOpen && (
+            <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
+              <button
+                className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                onClick={() => {
+                  setDropdownMessage(null);
+                  handleEditMessage(msg._id);
+                }}
+              >
+                <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                <span className="text-sm">Edit</span>
+              </button>
+              <button
+                className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                onClick={() => {
+                  setDropdownMessage(null);
+                  handleDeleteMessage(msg._id);
+                }}
+              >
+                <TrashIcon className="h-4 w-4 text-red-500" />
+                <span className="text-sm">Delete</span>
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    })
+  ) : (
+    <p className="text-gray-500 dark:text-gray-400">No messages available.</p>
+  )}
+  <div ref={messagesEndRef} />
+</div>
+
+
 
           {/* Input Section */}
           {selectedChannel && (
