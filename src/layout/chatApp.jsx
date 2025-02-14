@@ -545,70 +545,107 @@ const markNotificationsAsRead = async () => {
             </div>
           )}
 
-              {/* Chat Messages Section */}
-              <div ref={messagesContainerRef}  className="flex-1 p-6 overflow-y-auto">
-  {selectedChannel ? (
-    messages.map((msg) => {
-      const isHovered = hoveredMessage === msg._id;
-      const isDropdownOpen = dropdownMessage === msg._id;
+             {/* Messages */}
+         
+          <div ref={messagesContainerRef} className="flex-1 p-6 overflow-y-auto">
+      {selectedChannel ? (
+        messages.map((msg) => {
+          const isHovered = hoveredMessage === msg._id;
+          const isDropdownOpen = dropdownMessage === msg._id;
+          const isEditing = editMessageId === msg._id;
 
-      return (
-        <div
-          key={msg._id}
-          className={`flex ${msg.fromSelf ? "justify-end" : "justify-start"} mb-4 relative`}
-          onMouseEnter={() => setHoveredMessage(msg._id)} // Show arrow on hover
-          onMouseLeave={() => setHoveredMessage(null)} // Hide on leave
-        >
-          {/* Message Bubble */}
-          <div className={`p-3 rounded-lg shadow-md max-w-xs relative ${msg.fromSelf ? "bg-blue-400 text-white" : "bg-white dark:bg-gray-700"}`}>
-            <p>{msg.message}</p>
+          return (
+            <div
+              key={msg._id}
+              className={`flex ${msg.fromSelf ? "justify-end" : "justify-start"} mb-4 relative`}
+              onMouseEnter={() => setHoveredMessage(msg._id)}
+              onMouseLeave={() => setHoveredMessage(null)}
+            >
+              <div className={`p-3 rounded-lg shadow-md max-w-xs relative ${
+                msg.fromSelf ? "bg-blue-400 text-white" : "bg-white dark:bg-gray-700"
+              }`}>
+                {isEditing ? (
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleEditMessage(msg._id);
+                    }}
+                    className="w-full"
+                  >
+                    <input
+                      type="text"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="w-full p-1 text-black rounded"
+                      autoFocus
+                    />
+                    <div className="flex justify-end mt-2 space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditMessageId(null);
+                          setEditText("");
+                        }}
+                        className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={!editText.trim()}
+                        className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p>{msg.message}</p>
+                )}
 
-            {/* Show Up Arrow on Hover (Only for the Hovered Message) */}
-            {isHovered && msg.fromSelf && (
-              <button
-                className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDropdownMessage(isDropdownOpen ? null : msg._id); // Toggle dropdown for this message only
-                }}
-              >
-                <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-              </button>
-            )}
-          </div>
+                {isHovered && msg.fromSelf && !isEditing && (
+                  <button
+                    className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDropdownMessage(isDropdownOpen ? null : msg._id);
+                    }}
+                  >
+                    <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                  </button>
+                )}
+              </div>
 
-          {/* Dropdown Popup (Only for the Clicked Message) */}
-          {isDropdownOpen && (
-            <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
-              <button
-                className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                onClick={() => {
-                  setDropdownMessage(null);
-                  handleEditMessage(msg._id);
-                }}
-              >
-                <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                <span className="text-sm">Edit</span>
-              </button>
-              <button
-                className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                onClick={() => {
-                  setDropdownMessage(null);
-                  handleDeleteMessage(msg._id);
-                }}
-              >
-                <TrashIcon className="h-4 w-4 text-red-500" />
-                <span className="text-sm">Delete</span>
-              </button>
+              {isDropdownOpen && (
+                <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
+                  <button
+                    className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                    onClick={() => {
+                      setEditMessageId(msg._id);
+                      setEditText(msg.message);
+                      setDropdownMessage(null);
+                    }}
+                  >
+                    <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                    <span className="text-sm">Edit</span>
+                  </button>
+                  <button
+                    className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                    onClick={() => handleDeleteMessage(msg._id)}
+                  >
+                    <TrashIcon className="h-4 w-4 text-red-500" />
+                    <span className="text-sm">Delete</span>
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      );
-    })
-  ) : (
-    <p className="text-gray-500 dark:text-gray-400">No messages available.</p>
-  )}
-</div>
+          );
+        })
+      ) : (
+        <p className="text-gray-500 dark:text-gray-400">No messages available.</p>
+      )}
+      <div ref={messagesEndRef} />
+    </div>
 
 
 
