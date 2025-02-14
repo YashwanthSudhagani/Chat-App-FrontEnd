@@ -123,26 +123,28 @@ const ChatApp = () => {
 
   const toggleNotifications = () => {
     setIsNotificationsOpen(!isNotificationsOpen);
-    
+
     if (!isNotificationsOpen) {
       markNotificationsAsRead();
     }
   };
-  
-const markNotificationsAsRead = async () => {
-  try {
-    await axios.put(`${chatURL}/notification/notifications/read/${userEmail}`);
-    
-    // Update the local state to mark all notifications as read
-    setNotifications((prevNotifications) =>
-      prevNotifications.map((notif) => ({ ...notif, read: true }))
-    );
 
-    setUnreadNotifications(0); // Reset unread count
-  } catch (err) {
-    console.error("Error marking notifications as read:", err);
-  }
-};
+  const markNotificationsAsRead = async () => {
+    try {
+      await axios.put(
+        `${chatURL}/notification/notifications/read/${userEmail}`
+      );
+
+      // Update the local state to mark all notifications as read
+      setNotifications((prevNotifications) =>
+        prevNotifications.map((notif) => ({ ...notif, read: true }))
+      );
+
+      setUnreadNotifications(0); // Reset unread count
+    } catch (err) {
+      console.error("Error marking notifications as read:", err);
+    }
+  };
 
   // Fetch available channels dynamically
   useEffect(() => {
@@ -228,27 +230,28 @@ const markNotificationsAsRead = async () => {
   useEffect(() => {
     const messagesContainer = messagesContainerRef.current;
     if (!messagesContainer) return;
-  
+
     const handleScroll = () => {
       // Check if user has scrolled near the bottom
       const isUserAtBottom =
         messagesContainer.scrollHeight - messagesContainer.scrollTop <=
         messagesContainer.clientHeight + 50; // 50px threshold
-  
+
       setIsAtBottom(isUserAtBottom);
     };
-  
+
     messagesContainer.addEventListener("scroll", handleScroll);
-    
+
     return () => messagesContainer.removeEventListener("scroll", handleScroll);
   }, []);
-  
+
   useEffect(() => {
     if (isAtBottom && messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
     }
   }, [messages]); // Runs when messages update
-  
+
   // Toggle dark mode
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -315,7 +318,6 @@ const markNotificationsAsRead = async () => {
     console.log("Selected Date:", date); // For debugging
   }; // Call this when the user comes online or changes channel
 
-  
   const handleEditMessage = async (messageId) => {
     try {
       if (!editText.trim()) {
@@ -323,18 +325,15 @@ const markNotificationsAsRead = async () => {
         return;
       }
 
-      const response = await axios.put(
-        `${chatURL}/messages/${messageId}`,
-        { text: editText.trim() }
-      );
+      const response = await axios.put(`${chatURL}/messages/${messageId}`, {
+        text: editText.trim(),
+      });
 
       if (response.data) {
         // Update the messages state with the edited message
-        setMessages(prevMessages =>
-          prevMessages.map(msg =>
-            msg._id === messageId
-              ? { ...msg, message: editText.trim() }
-              : msg
+        setMessages((prevMessages) =>
+          prevMessages.map((msg) =>
+            msg._id === messageId ? { ...msg, message: editText.trim() } : msg
           )
         );
 
@@ -360,7 +359,6 @@ const markNotificationsAsRead = async () => {
     }
   };
 
- 
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
       {/* Sidebar */}
@@ -446,7 +444,7 @@ const markNotificationsAsRead = async () => {
         </section>
 
         {isNotificationsOpen && (
-         <div className="absolute inset-y-0 right-0 w-[calc(100%-80px)] bg-white dark:bg-gray-900 flex flex-col p-6 z-50">
+          <div className="absolute inset-y-0 right-0 w-[calc(100%-80px)] bg-white dark:bg-gray-900 flex flex-col p-6 z-50">
             <div className="flex justify-between items-center border-b pb-4 dark:border-gray-600">
               <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200">
                 Notifications
@@ -467,7 +465,7 @@ const markNotificationsAsRead = async () => {
                 notifications.map((notif) => (
                   <div
                     key={notif._id}
-                    className={`py-2 px-4 rounded-md ${ 
+                    className={`py-2 px-4 rounded-md ${
                       notif.read ? "bg-gray-100" : "bg-yellow-100"
                     }`}
                   >
@@ -545,109 +543,119 @@ const markNotificationsAsRead = async () => {
             </div>
           )}
 
-             {/* Messages */}
-         
-          <div ref={messagesContainerRef} className="flex-1 p-6 overflow-y-auto">
-      {selectedChannel ? (
-        messages.map((msg) => {
-          const isHovered = hoveredMessage === msg._id;
-          const isDropdownOpen = dropdownMessage === msg._id;
-          const isEditing = editMessageId === msg._id;
+          {/* Messages */}
 
-          return (
-            <div
-              key={msg._id}
-              className={`flex ${msg.fromSelf ? "justify-end" : "justify-start"} mb-4 relative`}
-              onMouseEnter={() => setHoveredMessage(msg._id)}
-              onMouseLeave={() => setHoveredMessage(null)}
-            >
-              <div className={`p-3 rounded-lg shadow-md max-w-xs relative ${
-                msg.fromSelf ? "bg-blue-400 text-white" : "bg-white dark:bg-gray-700"
-              }`}>
-                {isEditing ? (
-                  <form 
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleEditMessage(msg._id);
-                    }}
-                    className="w-full"
+          <div
+            ref={messagesContainerRef}
+            className="flex-1 p-6 overflow-y-auto"
+          >
+            {selectedChannel ? (
+              messages.map((msg) => {
+                const isHovered = hoveredMessage === msg._id;
+                const isDropdownOpen = dropdownMessage === msg._id;
+                const isEditing = editMessageId === msg._id;
+
+                return (
+                  <div
+                    key={msg._id}
+                    className={`flex ${
+                      msg.fromSelf ? "justify-end" : "justify-start"
+                    } mb-4 relative`}
+                    onMouseEnter={() => setHoveredMessage(msg._id)}
+                    onMouseLeave={() => setHoveredMessage(null)}
                   >
-                    <input
-                      type="text"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      className="w-full p-1 text-black rounded"
-                      autoFocus
-                    />
-                    <div className="flex justify-end mt-2 space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditMessageId(null);
-                          setEditText("");
-                        }}
-                        className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={!editText.trim()}
-                        className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
-                      >
-                        Send
-                      </button>
+                    <div
+                      className={`p-3 rounded-lg shadow-md max-w-xs relative ${
+                        msg.fromSelf
+                          ? "bg-blue-400 text-white"
+                          : "bg-white dark:bg-gray-700"
+                      }`}
+                    >
+                      {isEditing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleEditMessage(msg._id);
+                          }}
+                          className="w-full"
+                        >
+                          <input
+                            type="text"
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            className="w-full p-1 text-black rounded"
+                            autoFocus
+                          />
+                          <div className="flex justify-end mt-2 space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditMessageId(msg._id);
+                                setEditText(msg.message);
+                                setDropdownMessage(null);
+                              }}
+                              className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={!editText.trim()}
+                              className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                            >
+                              Send
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <p>{msg.message}</p>
+                      )}
+
+                      {isHovered && msg.fromSelf && !isEditing && (
+                        <button
+                          className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDropdownMessage(isDropdownOpen ? null : msg._id);
+                          }}
+                        >
+                          <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                        </button>
+                      )}
                     </div>
-                  </form>
-                ) : (
-                  <p>{msg.message}</p>
-                )}
 
-                {isHovered && msg.fromSelf && !isEditing && (
-                  <button
-                    className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDropdownMessage(isDropdownOpen ? null : msg._id);
-                    }}
-                  >
-                    <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                  </button>
-                )}
-              </div>
-
-              {isDropdownOpen && (
-                <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
-                  <button
-                    className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                    onClick={() => {
-                      setEditMessageId(msg._id);
-                      setEditText(msg.message);
-                      setDropdownMessage(null);
-                    }}
-                  >
-                    <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                    <span className="text-sm">Edit</span>
-                  </button>
-                  <button
-                    className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                    onClick={() => handleDeleteMessage(msg._id)}
-                  >
-                    <TrashIcon className="h-4 w-4 text-red-500" />
-                    <span className="text-sm">Delete</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })
-      ) : (
-        <p className="text-gray-500 dark:text-gray-400">No messages available.</p>
-      )}
-      <div ref={messagesEndRef} />
-    </div>
-
-
+                    {isDropdownOpen && (
+                      <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
+                        <button
+                          className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                          onClick={() => {
+                            setEditMessageId(msg._id);
+                            setEditText(msg.message);
+                            setDropdownMessage(null);
+                          }}
+                        >
+                          <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                          <span className="text-sm">Edit</span>
+                        </button>
+                        <button
+                          className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                          onClick={() => handleDeleteMessage(msg._id)}
+                        >
+                          <TrashIcon className="h-4 w-4 text-red-500" />
+                          <span className="text-sm">Delete</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-gray-500 dark:text-gray-400">
+                No messages available.
+              </p>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
 
           {/* Input Section */}
           {selectedChannel && (
@@ -686,8 +694,5 @@ const markNotificationsAsRead = async () => {
     </div>
   );
 };
-
-
-
 
 export default ChatApp;
