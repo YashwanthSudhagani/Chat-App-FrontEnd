@@ -545,10 +545,7 @@ const ChatApp = () => {
 
           {/* Messages */}
 
-          <div
-            ref={messagesContainerRef}
-            className="flex-1 p-6 overflow-y-auto"
-          >
+          <div ref={messagesContainerRef} className="flex-1 p-6 overflow-y-auto">
             {selectedChannel ? (
               messages.map((msg) => {
                 const isHovered = hoveredMessage === msg._id;
@@ -590,9 +587,8 @@ const ChatApp = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                setEditMessageId(msg._id);
-                                setEditText(msg.message);
-                                setDropdownMessage(null);
+                                setEditMessageId(null);
+                                setEditText("");
                               }}
                               className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
                             >
@@ -654,7 +650,6 @@ const ChatApp = () => {
                 No messages available.
               </p>
             )}
-            <div ref={messagesEndRef} />
           </div>
 
           {/* Input Section */}
