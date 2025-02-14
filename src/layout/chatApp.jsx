@@ -83,10 +83,12 @@ const ChatApp = () => {
   const [notifications, setNotifications] = useState([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
   const [hoveredMessage, setHoveredMessage] = useState(null);
   const [dropdownMessage, setDropdownMessage] = useState(null);
   const [editMessageId, setEditMessageId] = useState(null);
+  const [editText, setEditText] = useState("");
 
   const userEmail = localStorage.getItem("userEmail");
 
@@ -218,18 +220,35 @@ const markNotificationsAsRead = async () => {
     return () => socket.off("msg-receive"); // Clean up listener
   }, []);
 
-  useEffect(() => {
-    // Scroll to the bottom when messages update
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
-
   // Filter channels based on search input
   const filteredChannels = channels.filter((channel) =>
     channel.username.toLowerCase().includes(search.toLowerCase())
   );
 
+  useEffect(() => {
+    const messagesContainer = messagesContainerRef.current;
+    if (!messagesContainer) return;
+  
+    const handleScroll = () => {
+      // Check if user has scrolled near the bottom
+      const isUserAtBottom =
+        messagesContainer.scrollHeight - messagesContainer.scrollTop <=
+        messagesContainer.clientHeight + 50; // 50px threshold
+  
+      setIsAtBottom(isUserAtBottom);
+    };
+  
+    messagesContainer.addEventListener("scroll", handleScroll);
+    
+    return () => messagesContainer.removeEventListener("scroll", handleScroll);
+  }, []);
+  
+  useEffect(() => {
+    if (isAtBottom && messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages]); // Runs when messages update
+  
   // Toggle dark mode
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -296,34 +315,52 @@ const markNotificationsAsRead = async () => {
     console.log("Selected Date:", date); // For debugging
   }; // Call this when the user comes online or changes channel
 
-  const handleEditMessage = async (messageId, text) => {
+  
+  const handleEditMessage = async (messageId) => {
     try {
-      const res = await fetch(`/api/messages/${messageId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok) {
-        setEditMessageId(null);
+      if (!editText.trim()) {
+        console.error("Edit text cannot be empty");
+        return;
       }
-    } catch (err) {
-      console.error("Error updating message:", err);
+
+      const response = await axios.put(
+        `${chatURL}/messages/${messageId}`,
+        { text: editText.trim() }
+      );
+
+      if (response.data) {
+        // Update the messages state with the edited message
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg._id === messageId
+              ? { ...msg, message: editText.trim() }
+              : msg
+          )
+        );
+
+        // Reset edit states
+        setEditMessageId(null);
+        setEditText("");
+        setDropdownMessage(null);
+      }
+    } catch (error) {
+      console.error("Error updating message:", error);
+      alert("Failed to update message. Please try again.");
     }
   };
 
+  // Delete a message
   const handleDeleteMessage = async (messageId) => {
     try {
-      const res = await fetch(`/api/messages/${messageId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
-        console.log("Message deleted successfully");
-      }
-    } catch (err) {
-      console.error("Error deleting message:", err);
+      await axios.delete(`${chatURL}/messages/${messageId}`);
+      setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+      setDropdownMessage(null);
+    } catch (error) {
+      console.error("Error deleting message:", error);
     }
   };
 
+ 
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
       {/* Sidebar */}
@@ -508,8 +545,8 @@ const markNotificationsAsRead = async () => {
             </div>
           )}
 
-          {/* Messages */}
-         <div className="flex-1 p-6 overflow-y-auto">
+              {/* Chat Messages Section */}
+              <div ref={messagesContainerRef}  className="flex-1 p-6 overflow-y-auto">
   {selectedChannel ? (
     messages.map((msg) => {
       const isHovered = hoveredMessage === msg._id;
@@ -571,7 +608,6 @@ const markNotificationsAsRead = async () => {
   ) : (
     <p className="text-gray-500 dark:text-gray-400">No messages available.</p>
   )}
-  <div ref={messagesEndRef} />
 </div>
 
 
@@ -613,5 +649,8 @@ const markNotificationsAsRead = async () => {
     </div>
   );
 };
+
+
+
 
 export default ChatApp;

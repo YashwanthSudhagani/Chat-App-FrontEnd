@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const chatURL="https://chat-app-backend-2ph1.onrender.com/api"
+ const chatURL="https://chat-app-backend-2ph1.onrender.com/api"
 
 const Login = () => {
   const [email, setEmail] = useState("");
