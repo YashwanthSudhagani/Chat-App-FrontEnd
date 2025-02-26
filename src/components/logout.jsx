@@ -1,8 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const chatURL = "https://chat-app-backend-2ph1.onrender.com/api";
-
 const useLogout = () => {
   const [error, setError] = useState(""); // State for handling errors
   const navigate = useNavigate();
@@ -18,7 +16,7 @@ const useLogout = () => {
         return;
       }
 
-      const response = await fetch(`${chatURL}/logout`, {
+      const response = await fetch(`https://chat-app-backend-2ph1.onrender.com/api/logout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
