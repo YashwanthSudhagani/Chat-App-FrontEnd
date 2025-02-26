@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
 import axios from "axios";
 import Calendar from "react-calendar";
@@ -68,6 +69,7 @@ const generateAvatar = (username) => {
 };
 
 const ChatApp = () => {
+  const navigate = useNavigate();
   const [user, setUser] = useState([]);
   const [channels, setChannels] = useState([]);
   const [selectedChannel, setSelectedChannel] = useState(null);
@@ -393,7 +395,8 @@ const ChatApp = () => {
         >
           {darkMode ? <SunIcon /> : <MoonIcon />}
         </button>
-        <button className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer">
+        <button className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
+         onClick={() => navigate("/settings")}>
           <CogIcon />
         </button>
       </aside>
