@@ -20,7 +20,8 @@ const generateAvatar = (username) => {
 const Settings = () => {
   const [avatar, setAvatar] = useState({ initial: "?", backgroundColor: "#cccccc" });
   const [username, setUsername] = useState("");
-  const handleLogout = useLogout(); 
+
+  const { handleLogout, error } = useLogout(); // ✅ Fix: Extract both handleLogout and error
 
   useEffect(() => {
     const storedUsername = localStorage.getItem("username");
@@ -32,7 +33,7 @@ const Settings = () => {
   }, []);
 
   return (
-    <div className={`min-h-screen p-6`}>
+    <div className="min-h-screen p-6">
       {/* Header */}
       <div className="flex items-center mb-6">
         {/* Avatar */}
@@ -45,14 +46,18 @@ const Settings = () => {
 
         {/* Display Logged-in Username */}
         <h2 className="text-2xl font-semibold">{username || "Guest"}</h2>
-         {/* Logout Button */}
-         <button
-          onClick={() => handleLogout()}  // ✅ Fix: Ensure function is called correctly
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout} // ✅ Fix: Call the function correctly
           className="ml-auto bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
         >
           Logout
         </button>
       </div>
+
+      {/* Display Logout Error Message */}
+      {error && <p className="text-red-500 text-sm mt-2">{error}</p>} {/* ✅ Fix: Display logout errors if any */}
 
       {/* Settings Options */}
       <div className="space-y-4">
