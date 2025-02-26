@@ -12,6 +12,10 @@ const useLogout = () => {
 
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        setError("No authentication token found. Please log in.");
+        return;
+      }
 
       const response = await fetch(`${chatURL}/logout`, {
         method: "POST",
@@ -21,26 +25,33 @@ const useLogout = () => {
         },
       });
 
-      let data;
+      // ✅ Log full response for debugging
+      console.log("Logout response status:", response.status);
+      console.log("Logout response headers:", response.headers);
 
-      // Try to parse the response as JSON
-      try {
+      let data;
+      const contentType = response.headers.get("content-type");
+
+      // ✅ Ensure response is JSON before parsing
+      if (contentType && contentType.includes("application/json")) {
         data = await response.json();
-      } catch (err) {
-        console.error("Failed to parse JSON:", err);
+      } else {
+        const text = await response.text(); // Read response as text
+        console.warn("Non-JSON response:", text);
         throw new Error("Invalid response from server.");
       }
 
-      // Check if the response is successful
+      // ✅ Check response status
       if (!response.ok) {
-        const errorMessage = data.msg || "Logout failed. Please try again.";
+        const errorMessage = data?.msg || `Logout failed: ${response.statusText}`;
         setError(errorMessage);
         return;
       }
 
-      // Logout successful, clear local storage
+      // ✅ Logout successful, clear storage and redirect
       localStorage.removeItem("token");
-     
+      localStorage.removeItem("user");
+
       alert("Logout successful!");
       navigate("/login"); // Redirect to login page
     } catch (err) {
