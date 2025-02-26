@@ -12,6 +12,7 @@ const useLogout = () => {
 
     try {
       const token = localStorage.getItem("token");
+
       if (!token) {
         setError("No authentication token found. Please log in.");
         return;
@@ -25,26 +26,26 @@ const useLogout = () => {
         },
       });
 
-      // ✅ Log full response for debugging
-      console.log("Logout response status:", response.status);
-      console.log("Logout response headers:", response.headers);
+      // ✅ Log full response details for debugging
+      console.log("Logout Response Status:", response.status);
+      console.log("Logout Response Headers:", response.headers);
 
       let data;
-      const contentType = response.headers.get("content-type");
+      const contentType = response.headers.get("Content-Type");
 
-      // ✅ Ensure response is JSON before parsing
+      // ✅ Check if response contains JSON before parsing
       if (contentType && contentType.includes("application/json")) {
         data = await response.json();
       } else {
-        const text = await response.text(); // Read response as text
-        console.warn("Non-JSON response:", text);
+        const text = await response.text(); // Read response as plain text
+        console.warn("Server returned non-JSON response:", text);
         throw new Error("Invalid response from server.");
       }
 
-      // ✅ Check response status
+      // ✅ Handle failed responses
       if (!response.ok) {
-        const errorMessage = data?.msg || `Logout failed: ${response.statusText}`;
-        setError(errorMessage);
+        console.error("Logout failed:", data);
+        setError(data?.msg || `Logout failed: ${response.statusText}`);
         return;
       }
 
