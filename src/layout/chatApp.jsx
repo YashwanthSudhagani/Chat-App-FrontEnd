@@ -5,6 +5,8 @@ import io from "socket.io-client";
 import axios from "axios";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
+import VoiceRecorder from "../components/VoiceRecorder";
+import VoicePlayer from "../components/VoicePlayer";
 import {
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
@@ -68,7 +70,7 @@ const generateAvatar = (username) => {
   return avatarImage;
 };
 
-const ChatApp = () => {
+const ChatApp = ( receiver) => {
   const navigate = useNavigate();
   const [user, setUser] = useState([]);
   const [channels, setChannels] = useState([]);
@@ -91,13 +93,15 @@ const ChatApp = () => {
   const [dropdownMessage, setDropdownMessage] = useState(null);
   const [editMessageId, setEditMessageId] = useState(null);
   const [editText, setEditText] = useState("");
+  const [voiceMessages, setVoiceMessages] = useState([]);
+
 
   const userEmail = localStorage.getItem("userEmail");
 
   const handleEmojiPickerHideShow = () => {
     setShowEmojiPicker(!showEmojiPicker);
   };
-
+ 
   useEffect(() => {
     if (userEmail) {
       socket.emit("add-user", userEmail);
@@ -174,12 +178,16 @@ const ChatApp = () => {
 
   // Fetch messages dynamically when a channel is selected
   useEffect(() => {
-    if (!selectedChannel) return;
-
-    // Function to fetch messages
     const fetchMessages = async () => {
+      // ✅ Check if selectedChannel is available before proceeding
+      if (!selectedChannel || !selectedChannel._id) {
+        console.error("❌ Error: selectedChannel is null or does not have an _id");
+        return;
+      }
+  
       try {
-        const response = await fetch(`${chatURL}/messages/getmsg`, {
+        // Fetch text messages
+        const textResponse = await fetch(`${chatURL}/messages/getmsg`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -187,42 +195,68 @@ const ChatApp = () => {
             to: selectedChannel._id,
           }),
         });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch messages");
-        }
-
-        const data = await response.json();
-        setMessages(data);
+  
+        if (!textResponse.ok) throw new Error("Failed to fetch text messages");
+        const textData = await textResponse.json();
+  
+        // Fetch voice messages
+        const voiceResponse = await axios.get(
+          `https://chat-app-backend-2ph1.onrender.com/api/messages/${localStorage.getItem("userId")}/${selectedChannel._id}`
+        );
+  
+        const voiceData = voiceResponse.data;
+  
+        // Combine text and voice messages
+        const combinedMessages = [...textData, ...voiceData];
+  
+        // Sort messages by timestamp (assuming both have a `createdAt` field)
+        combinedMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  
+        setMessages(combinedMessages);
       } catch (error) {
-        console.error("Error fetching messages:", error);
+        console.error("❌ Error fetching messages:", error);
       }
     };
-
-    // Fetch messages immediately when the channel is selected
-    fetchMessages();
-
-    // Set interval to fetch messages every second
-    const intervalId = setInterval(fetchMessages, 1000);
-
-    // Cleanup interval when the component unmounts or when the selectedChannel changes
-    return () => clearInterval(intervalId);
-  }, [selectedChannel]);
-
-  // Listen for new messages via Socket.io
+  
+    // ✅ Ensure selectedChannel exists before calling fetchMessages
+    if (selectedChannel) {
+      fetchMessages();
+      const intervalId = setInterval(fetchMessages, 1000);
+  
+      // Cleanup when component unmounts or when selectedChannel changes
+      return () => clearInterval(intervalId);
+    }
+  }, [selectedChannel]); // Only run when selectedChannel changes
+  
+  
+  // ✅ Listen for real-time updates (Text & Voice Messages)
   useEffect(() => {
+    // Listen for new text messages
     socket.on("msg-receive", ({ msg, from }) => {
       console.log("Received new message from:", from, "Message:", msg);
-
-      // Ensure the message gets added to the correct chat
+  
       setMessages((prevMessages) => [
         ...prevMessages,
-        { fromSelf: false, message: msg },
+        { fromSelf: false, message: msg, type: "text" }, // Mark as text message
       ]);
     });
-
-    return () => socket.off("msg-receive"); // Clean up listener
+  
+    // Listen for new voice messages
+    socket.on("receive-voice-msg", ({ audioUrl }) => {
+      console.log("Received new voice message:", audioUrl);
+  
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { audioUrl, type: "voice" }, // Mark as voice message
+      ]);
+    });
+  
+    return () => {
+      socket.off("msg-receive");
+      socket.off("receive-voice-msg");
+    };
   }, []);
+  
 
   // Filter channels based on search input
   const filteredChannels = channels.filter((channel) =>
@@ -549,118 +583,131 @@ const ChatApp = () => {
           {/* Messages */}
 
           <div ref={messagesContainerRef} className="flex-1 p-6 overflow-y-auto">
-            {selectedChannel ? (
-              messages.map((msg) => {
-                const isHovered = hoveredMessage === msg._id;
-                const isDropdownOpen = dropdownMessage === msg._id;
-                const isEditing = editMessageId === msg._id;
+  {selectedChannel ? (
+    <>
+     <div className="space-y-4">
+  {voiceMessages.map((msg, index) => (
+    <div key={index} className="flex items-center space-x-3 bg-gray-200 p-3 rounded-lg shadow-md w-fit max-w-xs">
+      <span className="text-sm font-medium text-gray-700">Voice Message</span>
+      <audio controls className="outline-none">
+        <source src={msg.audioUrl} type="audio/webm" />
+        Your browser does not support the audio element.
+      </audio>
+    </div>
+  ))}
+</div>
 
-                return (
-                  <div
-                    key={msg._id}
-                    className={`flex ${
-                      msg.fromSelf ? "justify-end" : "justify-start"
-                    } mb-4 relative`}
-                    onMouseEnter={() => setHoveredMessage(msg._id)}
-                    onMouseLeave={() => setHoveredMessage(null)}
-                  >
-                    <div
-                      className={`p-3 rounded-lg shadow-md max-w-xs relative ${
-                        msg.fromSelf
-                          ? "bg-blue-400 text-white"
-                          : "bg-white dark:bg-gray-700"
-                      }`}
+
+      {/* Text Messages */}
+      {messages.map((msg) => {
+        const isHovered = hoveredMessage === msg._id;
+        const isDropdownOpen = dropdownMessage === msg._id;
+        const isEditing = editMessageId === msg._id;
+
+        return (
+          <div
+            key={msg._id}
+            className={`flex ${msg.fromSelf ? "justify-end" : "justify-start"} mb-4 relative`}
+            onMouseEnter={() => setHoveredMessage(msg._id)}
+            onMouseLeave={() => setHoveredMessage(null)}
+          >
+            <div
+              className={`p-3 rounded-lg shadow-md max-w-xs relative ${
+                msg.fromSelf ? "bg-blue-400 text-white" : "bg-white dark:bg-gray-700"
+              }`}
+            >
+              {isEditing ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleEditMessage(msg._id);
+                  }}
+                  className="w-full"
+                >
+                  <input
+                    type="text"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    className="w-full p-1 text-black rounded"
+                    autoFocus
+                  />
+                  <div className="flex justify-end mt-2 space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditMessageId(null);
+                        setEditText("");
+                      }}
+                      className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
                     >
-                      {isEditing ? (
-                        <form
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            handleEditMessage(msg._id);
-                          }}
-                          className="w-full"
-                        >
-                          <input
-                            type="text"
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            className="w-full p-1 text-black rounded"
-                            autoFocus
-                          />
-                          <div className="flex justify-end mt-2 space-x-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditMessageId(null);
-                                setEditText("");
-                              }}
-                              className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="submit"
-                              disabled={!editText.trim()}
-                              className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
-                            >
-                              Send
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
-                        <p>{msg.message}</p>
-                      )}
-
-                      {isHovered && msg.fromSelf && !isEditing && (
-                        <button
-                          className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDropdownMessage(isDropdownOpen ? null : msg._id);
-                          }}
-                        >
-                          <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                        </button>
-                      )}
-                    </div>
-
-                    {isDropdownOpen && (
-                      <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
-                        <button
-                          className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                          onClick={() => {
-                            setEditMessageId(msg._id);
-                            setEditText(msg.message);
-                            setDropdownMessage(null);
-                          }}
-                        >
-                          <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                          <span className="text-sm">Edit</span>
-                        </button>
-                        <button
-                          className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                          onClick={() => handleDeleteMessage(msg._id)}
-                        >
-                          <TrashIcon className="h-4 w-4 text-red-500" />
-                          <span className="text-sm">Delete</span>
-                        </button>
-                      </div>
-                    )}
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!editText.trim()}
+                      className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                    >
+                      Send
+                    </button>
                   </div>
-                );
-              })
-            ) : (
-              <p className="text-gray-500 dark:text-gray-400">
-                No messages available.
-              </p>
+                </form>
+              ) : (
+                <p>{msg.message}</p>
+              )}
+
+              {isHovered && msg.fromSelf && !isEditing && (
+                <button
+                  className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownMessage(isDropdownOpen ? null : msg._id);
+                  }}
+                >
+                  <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                </button>
+              )}
+            </div>
+
+            {isDropdownOpen && (
+              <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
+                <button
+                  className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                  onClick={() => {
+                    setEditMessageId(msg._id);
+                    setEditText(msg.message);
+                    setDropdownMessage(null);
+                  }}
+                >
+                  <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                  <span className="text-sm">Edit</span>
+                </button>
+                <button
+                  className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                  onClick={() => handleDeleteMessage(msg._id)}
+                >
+                  <TrashIcon className="h-4 w-4 text-red-500" />
+                  <span className="text-sm">Delete</span>
+                </button>
+              </div>
             )}
           </div>
+        );
+      })}
+    </>
+  ) : (
+    <p className="text-gray-500 dark:text-gray-400">No messages available.</p>
+  )}
+</div>
+
 
           {/* Input Section */}
           {selectedChannel && (
             <footer className="relative p-4 bg-gray-100 dark:bg-gray-700 border-t border-gray-400 dark:border-gray-600">
               <div className="flex items-center space-x-3">
                 <PhotoIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
-                <MicrophoneIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
+                <div className="mt-6 flex justify-center">
+        <VoiceRecorder user={user} receiver={receiver} />
+      </div>
                 <FaceSmileIcon
                   className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer"
                   onClick={handleEmojiPickerHideShow}
