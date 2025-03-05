@@ -199,7 +199,7 @@ const ChatApp = (receiver) => {
   
         // ✅ Fetch voice messages
         const voiceResponse = await axios.get(
-          `https://chat-app-backend-2ph1.onrender.com/api/messages/${localStorage.getItem("userId")}/${selectedChannel._id}`
+          `${chatURL}/messages/${localStorage.getItem("userId")}/${selectedChannel._id}`
         );
   
         const voiceData = voiceResponse.data;
