@@ -5,8 +5,7 @@ import io from "socket.io-client";
 import axios from "axios";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
-import VoiceRecorder from "../components/VoiceRecorder";
-import VoicePlayer from "../components/VoicePlayer";
+import { ReactMediaRecorder } from "react-media-recorder";
 import {
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
@@ -94,12 +93,27 @@ const ChatApp = (receiver) => {
   const [editMessageId, setEditMessageId] = useState(null);
   const [editText, setEditText] = useState("");
   const [voiceMessages, setVoiceMessages] = useState([]);
+  const [userId, setUserId] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [recordTime, setRecordTime] = useState("0:00");
+  const timerRef = useRef(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const intervalRef = useRef(null);
+  const [mediaBlobUrl, setMediaBlobUrl] = useState(null);
 
   const userEmail = localStorage.getItem("userEmail");
 
   const handleEmojiPickerHideShow = () => {
     setShowEmojiPicker(!showEmojiPicker);
   };
+
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const id = localStorage.getItem("userId");
+      setUserId(id);
+    };
+    fetchUserId();
+  }, []);
 
   useEffect(() => {
     if (userEmail) {
@@ -177,79 +191,147 @@ const ChatApp = (receiver) => {
 
   // Fetch messages dynamically when a channel is selected
   useEffect(() => {
+    if (!userId || !selectedChannel) return;
+
     const fetchMessages = async () => {
-      if (!selectedChannel || !selectedChannel._id) {
-        console.error("❌ Error: selectedChannel is null or does not have an _id");
-        return;
-      }
-  
       try {
-        // ✅ Fetch text messages
-        const textResponse = await fetch(`${chatURL}/messages/getmsg`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from: localStorage.getItem("userId"),
+        const response = await axios.post(
+          `http://localhost:5000/api/messages/getmsg`,
+          {
+            from: userId,
             to: selectedChannel._id,
-          }),
-        });
-  
-        if (!textResponse.ok) throw new Error("Failed to fetch text messages");
-        const textData = await textResponse.json();
-  
-        // ✅ Fetch voice messages
-        const voiceResponse = await axios.get(
-          `${chatURL}/messages/${localStorage.getItem("userId")}/${selectedChannel._id}`
+          }
         );
-  
-        const voiceData = voiceResponse.data;
-  
-        // ✅ Combine and sort messages
-        const combinedMessages = [...textData, ...voiceData].sort(
-          (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-        );
-  
-        setMessages(combinedMessages);
+        setMessages(response.data);
       } catch (error) {
-        console.error("❌ Error fetching messages:", error);
+        console.error(
+          "Error fetching messages:",
+          error.response?.data || error.message
+        );
       }
     };
-  
-    if (selectedChannel) {
-      fetchMessages();
-      const intervalId = setInterval(fetchMessages, 1000);
-  
-      return () => clearInterval(intervalId);
-    }
-  }, [selectedChannel]);
-  
-  // ✅ Listen for real-time updates (Text & Voice Messages)
-  useEffect(() => {
-    // Listen for new text messages
-    socket.on("msg-receive", ({ msg, from }) => {
-      console.log("Received new message from:", from, "Message:", msg);
 
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { fromSelf: false, message: msg, type: "text" }, // Mark as text message
-      ]);
+    const fetchVoiceMessages = async () => {
+      try {
+        const response = await axios.get(
+          `http://localhost:5000/api/messages/${userId}/${selectedChannel._id}`
+        );
+        setVoiceMessages(response.data);
+      } catch (error) {
+        console.error(
+          "Error fetching voice messages:",
+          error.response?.data || error.message
+        );
+      }
+    };
+
+    fetchMessages();
+    fetchVoiceMessages();
+
+    const intervalId = setInterval(() => {
+      fetchMessages();
+      fetchVoiceMessages();
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, [userId, selectedChannel]);
+
+  // Listen for real-time updates (Text & Voice Messages)
+  useEffect(() => {
+    socket.emit("join-chat", { userId });
+
+    socket.on("msg-receive", ({ msg }) => {
+      setMessages((prev) => [...prev, { fromSelf: false, message: msg }]);
     });
 
-    // Listen for new voice messages
-    socket.on("receive-voice-msg", ({ audioUrl }) => {
-      console.log("Received new voice message:", audioUrl);
-
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        { audioUrl, type: "voice" }, // Mark as voice message
-      ]);
+    socket.on("receive-voice-msg", ({ audioUrl, from }) => {
+      const isFromSelf = from === userId;
+      console.log(
+        `Voice message from ${from}, Current User ID: ${userId}, fromSelf: ${isFromSelf}`
+      );
+      setVoiceMessages((prev) => [...prev, { fromSelf: isFromSelf, audioUrl }]);
     });
 
     return () => {
       socket.off("msg-receive");
       socket.off("receive-voice-msg");
     };
-  }, []);
+  }, [userId]);
+
+  const startRecording = () => {
+    setRecording(true);
+    setRecordTime("0:00");
+
+    let seconds = 0;
+    timerRef.current = setInterval(() => {
+      seconds++;
+      let minutes = Math.floor(seconds / 60);
+      let remainingSeconds = seconds % 60;
+      setRecordTime(
+        `${minutes}:${remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`
+      );
+    }, 1000);
+  };
+
+  const stopRecording = async (mediaBlobUrl) => {
+    if (!mediaBlobUrl) {
+      console.error("No audio recorded!");
+      return;
+    }
+
+    try {
+      const response = await fetch(mediaBlobUrl);
+      const blob = await response.blob();
+
+      // Upload and send the audio file
+      await uploadAudio(blob);
+
+      // Reset the mediaBlobUrl to clear the input bar
+      setMediaBlobUrl(null);
+    } catch (error) {
+      console.error("Error processing recorded audio:", error);
+    }
+  };
+
+  const uploadAudio = async (blob) => {
+    if (!blob || !(blob instanceof Blob)) {
+      console.error("Invalid audio blob!");
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append("file", blob, "voice_note.mp3");
+      formData.append("from", userId);
+      formData.append("to", selectedChannel._id);
+
+      const uploadResponse = await axios.post(
+        `http://localhost:5000/api/messages/addvoice`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
+
+      // Emit the voice message with the sender's ID
+      socket.emit("send-voice-msg", {
+        to: selectedChannel._id,
+        audioUrl: uploadResponse.data.audioUrl,
+        from: userId,
+      });
+
+      // Mark as sent by the current user
+      setVoiceMessages((prev) => [
+        ...prev,
+        { fromSelf: true, audioUrl: uploadResponse.data.audioUrl },
+      ]);
+    } catch (error) {
+      console.error(
+        "Error uploading audio:",
+        error.response?.data || error.message
+      );
+    }
+  };
 
   // Filter channels based on search input
   const filteredChannels = channels.filter((channel) =>
@@ -388,6 +470,28 @@ const ChatApp = (receiver) => {
     }
   };
 
+  const combinedMessages = [...messages, ...voiceMessages].sort(
+    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
+  );
+
+  const handleDeleteVoiceMessage = async (voiceMessageId) => {
+    try {
+      await axios.delete(
+        `http://localhost:5000/api/messages/deletevoice/${voiceMessageId}`
+      );
+
+      // Remove from UI
+      setVoiceMessages((prev) =>
+        prev.filter((msg) => msg._id !== voiceMessageId)
+      );
+    } catch (error) {
+      console.error(
+        "Error deleting voice message:",
+        error.response?.data || error.message
+      );
+    }
+  };
+
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
       {/* Sidebar */}
@@ -433,7 +537,7 @@ const ChatApp = (receiver) => {
       {/* Main Content */}
       <div className="flex flex-1">
         {/* Channel List */}
-        <section className="w-1/4 bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-800 dark:to-gray-700 p-4">
+        <section className="w-1/4 bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-800 dark:to-gray-700 p-4 flex flex-col h-full">
           <div className="border-b border-gray-400 dark:border-gray-600 pb-4">
             <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">
               Chats
@@ -446,31 +550,44 @@ const ChatApp = (receiver) => {
               className="mt-2 w-full px-3 py-2 bg-gray-200 dark:bg-gray-600 rounded focus:outline-none"
             />
           </div>
-          <ul className="mt-4 space-y-2">
-            {filteredChannels.map((channel) => (
-              <li
-                key={channel._id}
-                onClick={() => setSelectedChannel(channel)}
-                className={`cursor-pointer p-2 rounded flex items-center shadow-sm ${
-                  selectedChannel?._id === channel._id
-                    ? "bg-blue-400 dark:bg-gray-600"
-                    : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-500"
-                }`}
-              >
-                <div
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold"
+          {/* Chat List */}
+          <div className="flex-1 overflow-y-auto mt-4 space-y-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 overflow-hidden">
+            <ul className="space-y-2">
+              {filteredChannels.map((channel) => (
+                <li
+                  key={channel._id}
+                  onClick={() => setSelectedChannel(channel)}
+                  className={`cursor-pointer p-3 rounded-lg flex items-center shadow-md transition-transform duration-200 transform border w-full ${
+                    selectedChannel?._id === channel._id
+                      ? "bg-blue-500 text-white scale-105 shadow-lg"
+                      : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-500 hover:scale-105"
+                  }`}
                   style={{
-                    backgroundColor: generateAvatar(channel.username)
-                      .backgroundColor,
-                  }}
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }} // Prevents horizontal scrolling
                 >
-                  {generateAvatar(channel.username).initial}
-                </div>
-                <span>{channel.username}</span>
-              </li>
-            ))}
-          </ul>
-          <button className="w-full mt-auto justify-center bg-blue-500 text-white py-2 rounded hover:bg-blue-600">
+                  <div
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold shadow-sm"
+                    style={{
+                      backgroundColor: generateAvatar(channel.username)
+                        .backgroundColor,
+                    }}
+                  >
+                    {generateAvatar(channel.username).initial}
+                  </div>
+                  <span className="ml-3 font-medium truncate w-full">
+                    {channel.username}
+                  </span>{" "}
+                  {/* Ensures text doesn't overflow */}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Invite Button */}
+          <button className="bg-blue-500 text-white py-2 rounded hover:bg-blue-600 w-full shadow-md mt-2 sticky bottom-0">
             Invite
           </button>
         </section>
@@ -576,28 +693,20 @@ const ChatApp = (receiver) => {
           )}
 
           {/* Messages */}
-
           <div
             ref={messagesContainerRef}
             className="flex-1 p-6 overflow-y-auto"
           >
             {selectedChannel ? (
-              <>
-                <div className="space-y-4">
-                  {voiceMessages.map((msg, index) => (
-                    <VoicePlayer key={index} audioUrl={msg.audioUrl} />
-                  ))}
-                </div>
-
-                {/* Text Messages */}
-                {messages.map((msg) => {
+              <div className="space-y-4">
+                {combinedMessages.map((msg, index) => {
                   const isHovered = hoveredMessage === msg._id;
-                  const isDropdownOpen = dropdownMessage === msg._id;
                   const isEditing = editMessageId === msg._id;
+                  const isVoiceMessage = !!msg.audioUrl;
 
                   return (
                     <div
-                      key={msg._id}
+                      key={msg._id || index}
                       className={`flex ${
                         msg.fromSelf ? "justify-end" : "justify-start"
                       } mb-4 relative`}
@@ -605,13 +714,38 @@ const ChatApp = (receiver) => {
                       onMouseLeave={() => setHoveredMessage(null)}
                     >
                       <div
-                        className={`p-3 rounded-lg shadow-md max-w-xs relative ${
+                        className={`p-3 rounded-lg shadow-md ${
                           msg.fromSelf
                             ? "bg-blue-400 text-white"
                             : "bg-white dark:bg-gray-700"
-                        }`}
+                        } ${
+                          isVoiceMessage
+                            ? "max-w-[350px] min-w-[250px] w-[30vw]"
+                            : "max-w-xs"
+                        }`} // Voice message container size adjusted
                       >
-                        {isEditing ? (
+                        {isVoiceMessage ? (
+                          <div className="flex items-center space-x-2 p-2 rounded-lg">
+                            {/* Voice Message Audio */}
+                            <audio
+                              controls
+                              src={msg.audioUrl}
+                              className="w-[250px] md:w-[320px] h-10 rounded-md"
+                            />
+
+                            {/* Delete Icon for Voice Messages */}
+                            {msg.fromSelf && (
+                              <button
+                                onClick={() =>
+                                  handleDeleteVoiceMessage(msg._id)
+                                }
+                                className="p-2 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500"
+                              >
+                                <TrashIcon className="h-6 w-6 text-red-500" />
+                              </button>
+                            )}
+                          </div>
+                        ) : isEditing ? (
                           <form
                             onSubmit={(e) => {
                               e.preventDefault();
@@ -623,7 +757,7 @@ const ChatApp = (receiver) => {
                               type="text"
                               value={editText}
                               onChange={(e) => setEditText(e.target.value)}
-                              className="w-full p-1 text-black rounded"
+                              className="w-full p-2 text-black rounded"
                               autoFocus
                             />
                             <div className="flex justify-end mt-2 space-x-2">
@@ -633,16 +767,16 @@ const ChatApp = (receiver) => {
                                   setEditMessageId(null);
                                   setEditText("");
                                 }}
-                                className="px-2 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
+                                className="px-3 py-1 text-sm bg-gray-500 text-white rounded hover:bg-gray-600"
                               >
                                 Cancel
                               </button>
                               <button
                                 type="submit"
                                 disabled={!editText.trim()}
-                                className="px-2 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
+                                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-400"
                               >
-                                Send
+                                Save
                               </button>
                             </div>
                           </form>
@@ -650,47 +784,53 @@ const ChatApp = (receiver) => {
                           <p>{msg.message}</p>
                         )}
 
-                        {isHovered && msg.fromSelf && !isEditing && (
-                          <button
-                            className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500 absolute bottom-1 right-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDropdownMessage(
-                                isDropdownOpen ? null : msg._id
-                              );
-                            }}
-                          >
-                            <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
-                          </button>
-                        )}
-                      </div>
+                        {/* Hover Edit & Delete for Normal Messages */}
+                        {isHovered &&
+                          msg.fromSelf &&
+                          !isEditing &&
+                          !isVoiceMessage && (
+                            <div className="absolute bottom-1 right-1">
+                              <button
+                                className="ml-2 p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-500"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDropdownMessage(
+                                    dropdownMessage === msg._id ? null : msg._id
+                                  );
+                                }}
+                              >
+                                <ChevronUpIcon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                              </button>
 
-                      {isDropdownOpen && (
-                        <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
-                          <button
-                            className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                            onClick={() => {
-                              setEditMessageId(msg._id);
-                              setEditText(msg.message);
-                              setDropdownMessage(null);
-                            }}
-                          >
-                            <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
-                            <span className="text-sm">Edit</span>
-                          </button>
-                          <button
-                            className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
-                            onClick={() => handleDeleteMessage(msg._id)}
-                          >
-                            <TrashIcon className="h-4 w-4 text-red-500" />
-                            <span className="text-sm">Delete</span>
-                          </button>
-                        </div>
-                      )}
+                              {dropdownMessage === msg._id && (
+                                <div className="absolute -top-12 right-0 bg-gray-200 dark:bg-gray-600 p-2 rounded-md shadow-md z-50">
+                                  <button
+                                    className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                                    onClick={() => {
+                                      setEditMessageId(msg._id);
+                                      setEditText(msg.message);
+                                      setDropdownMessage(null);
+                                    }}
+                                  >
+                                    <PencilIcon className="h-4 w-4 text-gray-700 dark:text-gray-300" />
+                                    <span className="text-sm">Edit</span>
+                                  </button>
+                                  <button
+                                    className="flex items-center space-x-1 p-1 hover:bg-gray-300 dark:hover:bg-gray-500 rounded w-full"
+                                    onClick={() => handleDeleteMessage(msg._id)}
+                                  >
+                                    <TrashIcon className="h-4 w-4 text-red-500" />
+                                    <span className="text-sm">Delete</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                      </div>
                     </div>
                   );
                 })}
-              </>
+              </div>
             ) : (
               <p className="text-gray-500 dark:text-gray-400">
                 No messages available.
@@ -703,8 +843,44 @@ const ChatApp = (receiver) => {
             <footer className="relative p-4 bg-gray-100 dark:bg-gray-700 border-t border-gray-400 dark:border-gray-600">
               <div className="flex items-center space-x-3">
                 <PhotoIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
+                <ReactMediaRecorder
+                  audio
+                  onStop={stopRecording} // Automatically call stopRecording when recording stops
+                  render={({ startRecording, stopRecording }) => (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (isRecording) {
+                            stopRecording(); // Stop recording
+                            clearInterval(intervalRef.current);
+                            setRecordTime("0:00");
+                          } else {
+                            startRecording(); // Start recording
+                            let sec = 0;
+                            intervalRef.current = setInterval(() => {
+                              sec++;
+                              setRecordTime(
+                                `${Math.floor(sec / 60)}:${(sec % 60)
+                                  .toString()
+                                  .padStart(2, "0")}`
+                              );
+                            }, 1000);
+                          }
+                          setIsRecording(!isRecording);
+                        }}
+                        className={` h-6 w-6 ${
+                          isRecording ? "bg-red-500 rounded-full" : " text-gray-400"
+                        }`}
+                      >
+                        <MicrophoneIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
+                      </button>
 
-                <VoiceRecorder user={user} receiver={receiver} />
+                      {recordTime !== "0:00" && (
+                        <span className="ml-2">{recordTime}</span>
+                      )}
+                    </>
+                  )}
+                />
 
                 <FaceSmileIcon
                   className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer"

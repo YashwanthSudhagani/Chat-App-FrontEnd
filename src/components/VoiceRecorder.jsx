@@ -1,134 +1,182 @@
-import React, { useState, useRef } from "react";
-import axios from "axios";
-import { io } from "socket.io-client";
-import { MicrophoneIcon } from "@heroicons/react/24/solid";
+// import React, { useState, useEffect, useRef, useContext } from 'react';
+// import { io } from 'socket.io-client';
+// import axios from 'axios';
+// import { DarkModeContext } from './DarkMode';
+// import Recorder from 'react-mp3-recorder';
 
-const socket = io("https://chat-app-backend-2ph1.onrender.com");
-const chatURL = "https://chat-app-backend-2ph1.onrender.com/api";
-const VoiceRecorder = ({ user, receiver }) => {
-  const [recording, setRecording] = useState(false);
-  const [recordTime, setRecordTime] = useState(0);
-  const mediaRecorderRef = useRef(null);
-  const intervalRef = useRef(null);
-  const audioChunksRef = useRef([]); // ✅ Store audio chunks
+// const socket = io('https://mobilechatappbackend.onrender.com');
+// const chatURL = 'https://mobilechatappbackend.onrender.com/api';
 
-  // ✅ Start Recording
-  const startRecording = async () => {
-    try {
-      console.log("🎤 Requesting microphone access...");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+// const Messages = ({ channel }) => {
+//   const [messages, setMessages] = useState([]);
+//   const [voiceMessages, setVoiceMessages] = useState([]);
+//   const [newMessage, setNewMessage] = useState('');
+//   const [userId, setUserId] = useState(null);
+//   const { darkMode } = useContext(DarkModeContext);
+//   const [recording, setRecording] = useState(false);
+//   const [recordTime, setRecordTime] = useState('0:00');
+//   const timerRef = useRef(null);
 
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = []; // Reset chunks
+//   useEffect(() => {
+//     const fetchUserId = async () => {
+//       const id = localStorage.getItem('userId');
+//       setUserId(id);
+//     };
+//     fetchUserId();
+//   }, []);
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          console.log("🔹 Audio chunk captured:", event.data);
-        }
-      };
+//   useEffect(() => {
+//     if (!userId || !channel) return;
 
-      mediaRecorder.start();
-      setRecording(true);
-      setRecordTime(0);
+//     const fetchMessages = async () => {
+//       try {
+//         const response = await axios.post(`${chatURL}/messages/getmsg`, {
+//           from: userId,
+//           to: channel._id,
+//         });
+//         setMessages(response.data);
+//       } catch (error) {
+//         console.error('Error fetching messages:', error.response?.data || error.message);
+//       }
+//     };
 
-      intervalRef.current = setInterval(() => {
-        setRecordTime((prev) => prev + 1);
-      }, 1000);
+//     const fetchVoiceMessages = async () => {
+//       try {
+//         const response = await axios.get(`${chatURL}/messages/${userId}/${channel._id}`);
+//         setVoiceMessages(response.data);
+//       } catch (error) {
+//         console.error('Error fetching voice messages:', error.response?.data || error.message);
+//       }
+//     };
 
-      console.log("🎤 Recording started...");
-    } catch (error) {
-      console.error("❌ Error accessing microphone:", error);
-    }
-  };
+//     fetchMessages();
+//     fetchVoiceMessages();
+//     const intervalId = setInterval(() => {
+//       fetchMessages();
+//       fetchVoiceMessages();
+//     }, 1000);
+//     return () => clearInterval(intervalId);
+//   }, [userId, channel]);
 
-  // ✅ Stop Recording & Upload
-  const stopRecording = async () => {
-    if (!mediaRecorderRef.current) return;
-    
-    console.log("🛑 Stopping recording...");
-    mediaRecorderRef.current.stop();
-    clearInterval(intervalRef.current);
-    setRecording(false);
+//   useEffect(() => {
+//     socket.emit('join-chat', { userId });
 
-    mediaRecorderRef.current.onstop = async () => {
-      console.log("🎤 Recording stopped. Processing audio...");
-      
-      if (audioChunksRef.current.length === 0) {
-        console.error("❌ No recorded audio found.");
-        return;
-      }
+//     socket.on('msg-receive', ({ msg }) => {
+//       setMessages(prev => [...prev, { fromSelf: false, message: msg }]);
+//     });
 
-      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-      const audioFile = new File([audioBlob], "voiceMessage.webm", { type: "audio/webm" });
+//     socket.on('receive-voice-msg', ({ audioUrl }) => {
+//       setVoiceMessages(prev => [...prev, { fromSelf: false, audioUrl }]);
+//     });
 
-      console.log("📤 Uploading recorded audio...");
-      uploadAudio(audioFile);
-    };
-  };
+//     return () => {
+//       socket.off('msg-receive');
+//       socket.off('receive-voice-msg');
+//     };
+//   }, [userId]);
 
-  const uploadAudio = async (file) => {
-    if (!file) {
-      console.error("❌ No audio file to upload.");
-      return;
-    }
+//   const sendMessage = async () => {
+//     if (!newMessage.trim() || !userId) return;
 
-    if (!user || !receiver) {
-      console.error("❌ Sender (user) or receiver ID is missing.");
-      return;
-    }
+//     socket.emit('send-msg', { to: channel._id, msg: newMessage, from: userId });
+//     setMessages(prev => [...prev, { fromSelf: true, message: newMessage }]);
+//     setNewMessage('');
 
-    console.log("📤 Preparing to upload file:", file);
+//     try {
+//       await axios.post(`${chatURL}/messages/addmsg`, {
+//         from: userId,
+//         to: channel._id,
+//         message: newMessage,
+//       });
+//     } catch (error) {
+//       console.error('Error sending message:', error.response?.data || error.message);
+//     }
+//   };
 
-    const formData = new FormData();
-    formData.append("from", user); // ✅ Ensure correct key
-    formData.append("to", receiver); // ✅ Ensure correct key
-    formData.append("file", file); // ✅ Must match backend (`file`, not `audio`)
+//   const uploadAudio = async (blob) => {
+//     const formData = new FormData();
+//     formData.append('file', blob, 'voice_note.mp3');
+//     formData.append('from', userId);
+//     formData.append('to', channel._id);
 
-    // ✅ Log FormData for debugging
-    for (let pair of formData.entries()) {
-      console.log("📝 FormData:", pair[0], pair[1]);
-    }
+//     try {
+//       const response = await axios.post(`${chatURL}/messages/addvoice`, formData, {
+//         headers: { 'Content-Type': 'multipart/form-data' },
+//       });
+//       socket.emit('send-voice-msg', { to: channel._id, audioUrl: response.data.audioUrl });
+//       setVoiceMessages(prev => [...prev, { fromSelf: true, audioUrl: response.data.audioUrl }]);
+//     } catch (error) {
+//       console.error('Error uploading audio:', error.response?.data || error.message);
+//     }
+//   };
 
-    try {
-      const response = await axios.post(
-        `${chatURL}/messages/addvoice`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+//   const startRecording = () => {
+//     setRecording(true);
+//     setRecordTime('0:00');
 
-      if (response.status !== 201) {
-        throw new Error(`❌ Unexpected response: ${response.status}`);
-      }
+//     let seconds = 0;
+//     timerRef.current = setInterval(() => {
+//       seconds++;
+//       let minutes = Math.floor(seconds / 60);
+//       let remainingSeconds = seconds % 60;
+//       setRecordTime(`${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`);
+//     }, 1000);
+//   };
 
-      const { audioUrl } = response.data;
-      socket.emit("send-voice-msg", { to: receiver, audioUrl });
+//   const stopRecording = async (blob) => {
+//     clearInterval(timerRef.current);
+//     setRecording(false);
+//     setRecordTime('0:00');
+//     if (blob) {
+//       uploadAudio(blob);
+//     }
+//   };
 
-      console.log("✅ Voice message uploaded successfully:", audioUrl);
-    } catch (error) {
-      console.error("❌ Error uploading audio:", error.response?.data || error.message);
-    }
-  };
+//   return (
+//     <div className={`chat-container ${darkMode ? 'dark' : ''}`}>
+//       <div className="messages-list">
+//         {messages.map((msg, index) => (
+//           <div key={index} className={msg.fromSelf ? 'sent' : 'received'}>
+//             {msg.message}
+//           </div>
+//         ))}
+//         {voiceMessages.map((voice, index) => (
+//           <div key={index} className={voice.fromSelf ? 'sent' : 'received'}>
+//             <audio controls src={voice.audioUrl} />
+//           </div>
+//         ))}
+//       </div>
+//       <div className="input-container">
+//         <input
+//           type="text"
+//           value={newMessage}
+//           onChange={e => setNewMessage(e.target.value)}
+//           placeholder="Type a message..."
+//         />
+//         <button onClick={sendMessage}>Send</button>
+//         <div className="recording-container">
+//           <Recorder
+//             onRecordingComplete={stopRecording}
+//             render={({ startRecording: recorderStart, stopRecording: recorderStop }) => (
+//               <>
+//                 <button
+//                   onMouseDown={() => {
+//                     startRecording();
+//                     recorderStart();
+//                   }}
+//                   onMouseUp={recorderStop}
+//                   className={`record-button ${recording ? 'recording' : ''}`}
+//                 >
+//                   🎙️
+//                 </button>
+//                 {recording && <span className="record-timer">{recordTime}</span>}
+//               </>
+//             )}
+//           />
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
 
-  return (
-    <div className="flex items-center space-x-3">
-      <button
-        onClick={recording ? stopRecording : startRecording}
-        className={`"h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" ${
-          recording ? "bg-red-500 animate-pulse" : "bg-grey-500 hover:bg-grey-600"
-        }`}
-      >
-        <MicrophoneIcon />
-      </button>
-
-      {recording && (
-        <p className="mt-2 text-lg text-gray-700 font-semibold">
-          Recording... <span className="text-red-500">{recordTime}s</span>
-        </p>
-      )}
-    </div>
-  );
-};
-
-export default VoiceRecorder;
+// export default Messages;
