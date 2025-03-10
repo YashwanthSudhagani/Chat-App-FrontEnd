@@ -14,7 +14,7 @@ const Login = () => {
     setError("");
   
     try {
-      const response = await fetch(`http://localhost:5000/api/auths/login`, {
+      const response = await fetch(`${chatURL}/api/auths/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

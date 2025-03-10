@@ -196,7 +196,7 @@ const ChatApp = (receiver) => {
     const fetchMessages = async () => {
       try {
         const response = await axios.post(
-          `http://localhost:5000/api/messages/getmsg`,
+          `${chatURL}/messages/getmsg`,
           {
             from: userId,
             to: selectedChannel._id,
@@ -214,7 +214,7 @@ const ChatApp = (receiver) => {
     const fetchVoiceMessages = async () => {
       try {
         const response = await axios.get(
-          `http://localhost:5000/api/messages/${userId}/${selectedChannel._id}`
+          `${chatURL}/messages/${userId}/${selectedChannel._id}`
         );
         setVoiceMessages(response.data);
       } catch (error) {
@@ -306,7 +306,7 @@ const ChatApp = (receiver) => {
       formData.append("to", selectedChannel._id);
 
       const uploadResponse = await axios.post(
-        `http://localhost:5000/api/messages/addvoice`,
+        `${chatURL}/messages/addvoice`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
