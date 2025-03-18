@@ -5,6 +5,7 @@ import io from "socket.io-client";
 import axios from "axios";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
+import VoiceCall from "../components/VoiceCall";
 import { ReactMediaRecorder } from "react-media-recorder";
 import {
   ChatBubbleLeftRightIcon,
@@ -36,6 +37,7 @@ const chatURL = "https://chat-app-backend-2ph1.onrender.com/api";
 const socket = io("https://chat-app-backend-2ph1.onrender.com", {
   withCredentials: true,
 });
+
 
 const generateAvatar = (username) => {
   if (!username) return { initial: "?", backgroundColor: "#cccccc" }; // Fallback for invalid username
@@ -100,6 +102,7 @@ const ChatApp = (receiver) => {
   const [isRecording, setIsRecording] = useState(false);
   const intervalRef = useRef(null);
   const [mediaBlobUrl, setMediaBlobUrl] = useState(null);
+  const [isCallActive, setIsCallActive] = useState(false);
 
   const userEmail = localStorage.getItem("userEmail");
 
@@ -656,7 +659,7 @@ const ChatApp = (receiver) => {
             )}
             {selectedChannel && (
               <div className="flex items-center space-x-3">
-                <button className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
+                <button onClick={() => setIsCallActive(true)} className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
                   <PhoneIcon className="h-6 w-6 text-blue-500 cursor-pointer" />
                 </button>
                 <button className="text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-gray-100">
@@ -671,6 +674,14 @@ const ChatApp = (receiver) => {
               </div>
             )}
           </header>
+           {/* Show GroupCall Component when isCallActive is true */}
+      {isCallActive && (
+        <VoiceCall 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+          selectedChannel={selectedChannel} 
+          onClose={() => setIsCallActive(false)} 
+        />
+      )}
           {isCalendarOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-1/3 p-6">
