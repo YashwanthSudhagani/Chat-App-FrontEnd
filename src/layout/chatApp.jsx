@@ -7,6 +7,8 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import VoiceCall from "../components/VoiceCall";
 import { ReactMediaRecorder } from "react-media-recorder";
+import Polls from "../components/Poll";
+import InviteButton from "../components/InviteButton";
 import {
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
@@ -29,6 +31,8 @@ import {
   PencilIcon,
   TrashIcon,
   ChevronUpIcon,
+  UsersIcon,
+  ArchiveBoxIcon,
 } from "@heroicons/react/24/solid";
 import Picker from "emoji-picker-react"; // Using emoji-picker-react
 
@@ -103,8 +107,38 @@ const ChatApp = (receiver) => {
   const intervalRef = useRef(null);
   const [mediaBlobUrl, setMediaBlobUrl] = useState(null);
   const [isCallActive, setIsCallActive] = useState(false);
-
+  const [showPolls, setShowPolls] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  
   const userEmail = localStorage.getItem("userEmail");
+
+//  // Generate Invite Link and Copy to Clipboard
+// const handleInvite = async () => {
+//   if (!selectedChannel?._id) {
+//     alert("Please select a chat first.");
+//     return;
+//   }
+
+//   try {
+//     const response = await fetch("http://localhost:5000/api/invites/generate-invite", {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ chatId: selectedChannel._id }),
+//     });
+
+//     if (!response.ok) throw new Error("Failed to generate invite");
+
+//     const data = await response.json();
+//     const inviteUrl = `http://localhost:3000/invite/${data.inviteId}`;
+
+//     // Copy invite link to clipboard
+//     await navigator.clipboard.writeText(inviteUrl);
+//     alert("✅ Invite link copied to clipboard!");
+//   } catch (error) {
+//     alert("❌ Error generating invite: " + error.message);
+//   }
+// };
 
   const handleEmojiPickerHideShow = () => {
     setShowEmojiPicker(!showEmojiPicker);
@@ -495,6 +529,18 @@ const ChatApp = (receiver) => {
     }
   };
 
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
       {/* Sidebar */}
@@ -541,59 +587,70 @@ const ChatApp = (receiver) => {
       <div className="flex flex-1">
         {/* Channel List */}
         <section className="w-1/4 bg-gradient-to-br from-gray-100 to-gray-300 dark:from-gray-800 dark:to-gray-700 p-4 flex flex-col h-full">
-          <div className="border-b border-gray-400 dark:border-gray-600 pb-4">
-            <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">
-              Chats
-            </h2>
-            <input
-              type="text"
-              placeholder="Search channels..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="mt-2 w-full px-3 py-2 bg-gray-200 dark:bg-gray-600 rounded focus:outline-none"
-            />
-          </div>
-          {/* Chat List */}
-          <div className="flex-1 overflow-y-auto mt-4 space-y-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 overflow-hidden">
-            <ul className="space-y-2">
-              {filteredChannels.map((channel) => (
-                <li
-                  key={channel._id}
-                  onClick={() => setSelectedChannel(channel)}
-                  className={`cursor-pointer p-3 rounded-lg flex items-center shadow-md transition-transform duration-200 transform border w-full ${
-                    selectedChannel?._id === channel._id
-                      ? "bg-blue-500 text-white scale-105 shadow-lg"
-                      : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-500 hover:scale-105"
-                  }`}
-                  style={{
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }} // Prevents horizontal scrolling
-                >
-                  <div
-                    className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold shadow-sm"
-                    style={{
-                      backgroundColor: generateAvatar(channel.username)
-                        .backgroundColor,
-                    }}
-                  >
-                    {generateAvatar(channel.username).initial}
-                  </div>
-                  <span className="ml-3 font-medium truncate w-full">
-                    {channel.username}
-                  </span>{" "}
-                  {/* Ensures text doesn't overflow */}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Invite Button */}
-          <button className="bg-blue-500 text-white py-2 rounded hover:bg-blue-600 w-full shadow-md mt-2 sticky bottom-0">
-            Invite
+      {/* Header Section */}
+      <div className="border-b border-gray-400 dark:border-gray-600 pb-4 flex justify-between items-center">
+        <h2 className="text-lg font-bold text-gray-700 dark:text-gray-200">Chats</h2>
+        {/* Three Dots Menu */}
+        <div className="relative" ref={menuRef}>
+          <button onClick={() => setMenuOpen((prev) => !prev)} className="p-2 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600">
+            <EllipsisVerticalIcon className="w-6 h-6 text-gray-700 dark:text-gray-200" />
           </button>
-        </section>
+
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden z-50">
+              <button className="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 w-full">
+                <UsersIcon className="w-5 h-5 mr-3" /> New Group
+              </button>
+              <button className="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 w-full">
+                <VideoCameraIcon className="w-5 h-5 mr-3" onClick={() => navigate("/CreateMeet")} /> Meet Link
+              </button>
+              <button className="flex items-center px-4 py-2 hover:bg-gray-200 dark:hover:bg-gray-700 w-full">
+                <ArchiveBoxIcon className="w-5 h-5 mr-3" /> Archived
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Search Input */}
+      <input
+        type="text"
+        placeholder="Search channels..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="mt-2 w-full px-3 py-2 bg-gray-200 dark:bg-gray-600 rounded focus:outline-none"
+      />
+
+      {/* Chat List */}
+      <div className="flex-1 overflow-y-auto mt-4 space-y-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600">
+        <ul className="space-y-2">
+          {filteredChannels.map((channel) => (
+            <li
+              key={channel._id}
+              onClick={() => setSelectedChannel(channel)}
+              className={`cursor-pointer p-3 rounded-lg flex items-center shadow-md transition-transform duration-200 transform border w-full ${
+                selectedChannel?._id === channel._id
+                  ? "bg-blue-500 text-white scale-105 shadow-lg"
+                  : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-500 hover:scale-105"
+              }`}
+              style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            >
+              <div
+                className="h-8 w-8 rounded-full flex items-center justify-center text-white font-bold shadow-sm"
+                style={{ backgroundColor: generateAvatar(channel.username).backgroundColor }}
+              >
+                {generateAvatar(channel.username).initial}
+              </div>
+              <span className="ml-3 font-medium truncate w-full">{channel.username}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* <button className="bg-blue-500 text-white py-2 rounded hover:bg-blue-600 w-full shadow-md mt-2 sticky bottom-0" 
+      chatId={selectedChannel._id} >Invite</button> */}
+      {selectedChannel && <InviteButton  chatId={selectedChannel._id} />}
+    </section>
 
         {isNotificationsOpen && (
           <div className="absolute inset-y-0 right-0 w-[calc(100%-80px)] bg-white dark:bg-gray-900 flex flex-col p-6 z-50">
@@ -682,6 +739,7 @@ const ChatApp = (receiver) => {
           onClose={() => setIsCallActive(false)} 
         />
       )}
+
           {isCalendarOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-1/3 p-6">
@@ -847,6 +905,12 @@ const ChatApp = (receiver) => {
                 No messages available.
               </p>
             )}
+            
+        {/* Render Polls Component When Plus Icon is Clicked */}
+        {showPolls && <Polls />}
+<div className="chat-messages">
+  {/* Messages will be displayed here */}
+</div>
           </div>
 
           {/* Input Section */}
@@ -897,7 +961,8 @@ const ChatApp = (receiver) => {
                   className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer"
                   onClick={handleEmojiPickerHideShow}
                 />
-                <PlusIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer" />
+          <PlusIcon className="h-6 w-6 text-gray-400 hover:text-gray-600 cursor-pointer"
+           onClick={() => setShowPolls(true)}/>
                 <input
                   type="text"
                   value={newMessage}

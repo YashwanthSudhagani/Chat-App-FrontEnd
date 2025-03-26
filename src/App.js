@@ -4,6 +4,9 @@ import Login from './layout/Login';
 import ChatApp from './layout/chatApp';
 import VerifyEmail from './components/verifyEmail'; // Rename to start with uppercase
 import Settings from "./components/settings";
+import CreateMeet from "./layout/CreateMeet";
+import Room from "./components/Room"
+import { Users } from "lucide-react";
 
 // Define a Home or landing page
 function Home() {
@@ -32,7 +35,8 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
         <Route path="/Settings" element={<Settings />} />
-        
+        <Route path="/CreateMeet" element={<CreateMeet/>}/>
+        <Route path="/room/:roomId" element={<Room user={Users} />} />
         {/* Add the VerifyEmail route */}
         <Route path="/verify-email/:token" element={<VerifyEmail />} /> {/* Corrected the component name */}
         
