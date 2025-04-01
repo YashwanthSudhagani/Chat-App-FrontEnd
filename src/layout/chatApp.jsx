@@ -750,65 +750,46 @@ const ChatApp = (receiver) => {
       {/* Sidebar */}
       <aside className="w-20 bg-gradient-to-br from-blue-300 to-gray-500 dark:from-gray-800 dark:to-gray-900 flex flex-col py-6 space-y-6 items-center">
         {/* Logged-in User Avatar */}
-        <div className="flex flex-col items-center cursor-pointer relative">
-          {/* Avatar Circle */}
-          <div
-            className="h-16 w-16 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white font-bold text-xl"
-            style={{
-              backgroundColor: generateAvatar(user?.username || "U").backgroundColor,
-            }}
-            onClick={() => {
-              const userInfoElement = document.getElementById("user-info-popup")
-              if (userInfoElement) {
-                userInfoElement.classList.toggle("hidden")
-              }
-            }}
-          >
-            {/* First letter */}
-            {user?.username ? user.username.charAt(0).toUpperCase() : "?"}
-          </div>
-
-          {/* Username under the circle */}
-          <span className="mt-2 text-sm text-white font-semibold max-w-[80px] truncate">
-            {user?.username || "User"}
-          </span>
-
-          {/* User Info Popup */}
-          <div
-            id="user-info-popup"
-            className="hidden absolute left-20 top-0 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg z-50 w-64"
-          >
-            <div className="text-gray-800 dark:text-gray-200">
-              <h3 className="font-bold text-lg mb-2">User Profile</h3>
-              <p className="mb-1">
-                <span className="font-semibold">Username:</span> {user?.username || "User"}
-              </p>
-              <p>
-                <span className="font-semibold">Email:</span> {userEmail || "No email"}
-              </p>
-            </div>
-          </div>
+        <div
+          className="h-16 w-16 rounded-full border-2 border-white shadow-lg mb-8 flex items-center justify-center text-white font-bold text-xl"
+          style={{
+            backgroundColor: generateAvatar(user.username).backgroundColor,
+          }}
+        >
+          {generateAvatar(user.username).initial}
         </div>
-
         <div className="space-y-6">
           <ChatBubbleLeftRightIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
-          <UserGroupIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
-          <BellIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" onClick={toggleNotifications} />
+          <button className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer">
+                <VideoCameraIcon  onClick={() => navigate("/CreateMeet")} />
+              </button>
+          {/* <UserGroupIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" /> */}
+          <BellIcon
+            className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
+            onClick={toggleNotifications}
+          />
           <CalendarDaysIcon
             className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
             onClick={toggleCalendar}
           />
-          <InboxArrowDownIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
-          <ArrowUpOnSquareIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
+          {/* <InboxArrowDownIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" />
+          <ArrowUpOnSquareIcon className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" /> */}
         </div>
         <div className="flex-1"></div>
-        <button className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" onClick={toggleDarkMode}>
+        <button
+          className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
+          onClick={toggleDarkMode}
+        >
           {darkMode ? <SunIcon /> : <MoonIcon />}
         </button>
-        <button className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer" onClick={() => navigate("/settings")}>
+        <button
+          className="h-8 w-8 text-white hover:text-gray-300 cursor-pointer"
+          onClick={() => navigate("/settings")}
+        >
           <CogIcon />
         </button>
       </aside>
+ 
 
       {/* Main Content */}
       <div className="flex flex-1">
