@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react"
-import { useRef } from "react"
+"use client"
+
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import io from "socket.io-client"
 import axios from "axios"
@@ -9,6 +10,8 @@ import VoiceCall from "../components/VoiceCall"
 import { ReactMediaRecorder } from "react-media-recorder"
 import Polls from "../components/Poll"
 import InviteButton from "../components/InviteButton"
+import Picker from "emoji-picker-react" // Using emoji-picker-react
+
 import {
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
@@ -34,16 +37,18 @@ import {
   UsersIcon,
   ArchiveBoxIcon,
 } from "@heroicons/react/24/solid"
-import Picker from "emoji-picker-react" // Using emoji-picker-react
 
-const chatURL = "https://chat-app-backend-2ph1.onrender.com/api"
+const chatURL = "http://localhost:5000/api"
+
 // Socket connection
 const socket = io("https://chat-app-backend-2ph1.onrender.com", {
   withCredentials: true,
 })
 
+// ✅ Fixed and optimized function
 const generateAvatar = (username) => {
   if (!username) return { initial: "?", backgroundColor: "#cccccc" } // Fallback for invalid username
+
   const avatarKey = `userAvatarImage_${username}`
   const existingAvatar = localStorage.getItem(avatarKey)
 
@@ -66,6 +71,7 @@ const generateAvatar = (username) => {
     "#90EE90",
     "#B0E0E6",
   ]
+
   const backgroundColor = colors[Math.floor(Math.random() * colors.length)]
   const initial = username.charAt(0).toUpperCase()
 
@@ -122,27 +128,27 @@ const ChatApp = (receiver) => {
   //  // Generate Invite Link and Copy to Clipboard
   // const handleInvite = async () => {
   //   if (!selectedChannel?._id) {
-  //     alert("Please select a chat first.");
-  //     return;
+  //   alert("Please select a chat first.");
+  //   return;
   //   }
 
   //   try {
-  //     const response = await fetch("http://localhost:5000/api/invites/generate-invite", {
-  //       method: "POST",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ chatId: selectedChannel._id }),
-  //     });
+  //   const response = await fetch("http://localhost:5000/api/invites/generate-invite", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ chatId: selectedChannel._id }),
+  //   });
 
-  //     if (!response.ok) throw new Error("Failed to generate invite");
+  //   if (!response.ok) throw new Error("Failed to generate invite");
 
-  //     const data = await response.json();
-  //     const inviteUrl = `http://localhost:3000/invite/${data.inviteId}`;
+  //   const data = await response.json();
+  //   const inviteUrl = `http://localhost:3000/invite/${data.inviteId}`;
 
-  //     // Copy invite link to clipboard
-  //     await navigator.clipboard.writeText(inviteUrl);
-  //     alert("✅ Invite link copied to clipboard!");
+  //   // Copy invite link to clipboard
+  //   await navigator.clipboard.writeText(inviteUrl);
+  //   alert("✅ Invite link copied to clipboard!");
   //   } catch (error) {
-  //     alert("❌ Error generating invite: " + error.message);
+  //   alert("❌ Error generating invite: " + error.message);
   //   }
   // };
 
@@ -548,10 +554,15 @@ const ChatApp = (receiver) => {
   // Add this function to handle adding members to a group
   const handleAddMembersToGroup = async () => {
     try {
-      if (!groupToAddMembers || membersToAdd.length === 0) {
-        alert("Please select members to add to the group")
+      if (!groupToAddMembers || !membersToAdd || membersToAdd.length === 0 || !userId) {
+        alert("Please select members and ensure you are logged in.")
         return
       }
+
+      console.log("🚀 Sending API Request with:")
+      console.log("Group ID:", groupToAddMembers?._id)
+      console.log("Members to Add:", membersToAdd)
+      console.log("Added By User ID:", userId)
 
       // Make API call to add members to the group
       const response = await axios.post(`${chatURL}/groups/addMembers`, {
@@ -560,22 +571,30 @@ const ChatApp = (receiver) => {
         addedBy: userId,
       })
 
-      if (response.data) {
-        // Update the group in localStorage
-        const existingGroups = JSON.parse(localStorage.getItem("userGroups") || "[]")
-        const updatedGroups = existingGroups.map((group) =>
-          group._id === groupToAddMembers._id ? { ...group, members: [...group.members, ...membersToAdd] } : group,
-        )
-        localStorage.setItem("userGroups", JSON.stringify(updatedGroups))
+      console.log("✅ Members added successfully:", response.data)
 
-        // Update the channels state
+      if (response.data) {
+        // Update the channels state with the updated group
         setChannels((prevChannels) =>
-          prevChannels.map((channel) =>
-            channel._id === groupToAddMembers._id
-              ? { ...channel, members: [...channel.members, ...membersToAdd] }
-              : channel,
-          ),
+          prevChannels.map((channel) => {
+            if (channel._id === groupToAddMembers._id) {
+              // Create a new object with updated members array
+              return {
+                ...channel,
+                members: [...channel.members, ...membersToAdd],
+              }
+            }
+            return channel
+          }),
         )
+
+        // If the selected channel is the one being updated, update it too
+        if (selectedChannel && selectedChannel._id === groupToAddMembers._id) {
+          setSelectedChannel({
+            ...selectedChannel,
+            members: [...selectedChannel.members, ...membersToAdd],
+          })
+        }
 
         // Reset states
         setIsAddMembersMode(false)
@@ -585,10 +604,146 @@ const ChatApp = (receiver) => {
         alert("Members added successfully!")
       }
     } catch (error) {
-      console.error("Error adding members to group:", error)
-      alert("Failed to add members to group. Please try again.")
+      console.error("❌ Error adding members to group:", error.response?.data?.msg || error.message)
+      alert(error.response?.data?.msg || "Failed to add members to group. Please try again.")
     }
   }
+
+  const handleRemoveMemberFromGroup = async (groupId, memberId) => {
+    try {
+      if (!groupId || !memberId) {
+        alert("Missing group or member information")
+        return
+      }
+
+      // Make API call to remove member from the group
+      const response = await axios.post(`${chatURL}/groups/remove-member`, {
+        groupId: groupId,
+        userId: memberId,
+        removedBy: userId,
+      })
+
+      if (response.data) {
+        // Update the channels state with the updated group
+        setChannels((prevChannels) =>
+          prevChannels.map((channel) =>
+            channel._id === groupId
+              ? { ...channel, members: channel.members.filter((id) => id !== memberId) }
+              : channel,
+          ),
+        )
+
+        // If the selected channel is the one being updated, update it too
+        if (selectedChannel && selectedChannel._id === groupId) {
+          setSelectedChannel({
+            ...selectedChannel,
+            members: selectedChannel.members.filter((id) => id !== memberId),
+          })
+        }
+
+        // If the user removed themselves, deselect the channel
+        if (memberId === userId) {
+          setSelectedChannel(null)
+          alert("You have left the group")
+        } else {
+          alert("Member removed successfully!")
+        }
+
+        // Close the group info popup if it's open
+        const groupInfoElement = document.getElementById("group-info-popup")
+        if (groupInfoElement) {
+          groupInfoElement.classList.add("hidden")
+        }
+      }
+    } catch (error) {
+      console.error("Error removing member from group:", error.response?.data?.msg || error.message)
+      alert(error.response?.data?.msg || "Failed to remove member from group. Please try again.")
+    }
+  }
+
+  const handleDeleteGroup = async (groupId) => {
+    try {
+      if (!groupId) {
+        alert("Missing group information")
+        return
+      }
+
+      // Confirm deletion
+      if (!window.confirm("Are you sure you want to delete this group?")) {
+        return
+      }
+
+      // Make API call to delete the group
+      const response = await axios.post(`${chatURL}/groups/delete`, {
+        groupId: groupId,
+        userId: userId,
+      })
+
+      if (response.data) {
+        // Remove the group from channels
+        setChannels((prevChannels) => prevChannels.filter((channel) => channel._id !== groupId))
+
+        // If the deleted group was selected, clear the selection
+        if (selectedChannel && selectedChannel._id === groupId) {
+          setSelectedChannel(null)
+        }
+
+        // Close the group info popup if it's open
+        const groupInfoElement = document.getElementById("group-info-popup")
+        if (groupInfoElement) {
+          groupInfoElement.classList.add("hidden")
+        }
+
+        alert("Group deleted successfully!")
+      }
+    } catch (error) {
+      console.error("Error deleting group:", error.response?.data?.msg || error.message)
+      alert(error.response?.data?.msg || "Failed to delete group. Please try again.")
+    }
+  }
+
+  // Add a function to fetch group members' details when a group is selected
+
+  // Add this useEffect after the other useEffect hooks:
+  useEffect(() => {
+    // Fetch group members' details when a group is selected
+    const fetchGroupMembersDetails = async () => {
+      if (selectedChannel && selectedChannel.isGroup && selectedChannel.members) {
+        try {
+          // For each member ID in the group, ensure we have their user details
+          const memberPromises = selectedChannel.members.map(async (memberId) => {
+            // Check if we already have this user's details in channels
+            const existingMember = channels.find((c) => c._id === memberId)
+            if (existingMember) return existingMember
+
+            // If not, fetch the user details
+            try {
+              const response = await fetch(`${chatURL}/auths/getUser/${memberId}`)
+              if (response.ok) {
+                return await response.json()
+              }
+              return null
+            } catch (error) {
+              console.error(`Error fetching details for member ${memberId}:`, error)
+              return null
+            }
+          })
+
+          const memberDetails = await Promise.all(memberPromises)
+
+          // Add any new member details to channels
+          const newMembers = memberDetails.filter((m) => m && !channels.some((c) => c._id === m._id))
+          if (newMembers.length > 0) {
+            setChannels((prev) => [...prev, ...newMembers])
+          }
+        } catch (error) {
+          console.error("Error fetching group members details:", error)
+        }
+      }
+    }
+
+    fetchGroupMembersDetails()
+  }, [selectedChannel, channels])
 
   return (
     <div className={`flex h-screen ${darkMode ? "dark" : ""}`}>
@@ -792,7 +947,7 @@ const ChatApp = (receiver) => {
                     onClick={async () => {
                       try {
                         // Create group chat API call
-                        const response = await axios.post(`http://localhost:5000/api/groups/create`, {
+                        const response = await axios.post(`${chatURL}/groups/create`, {
                           name: groupName,
                           members: [...selectedUsers, userId], // Include current user
                           createdBy: userId,
@@ -801,10 +956,6 @@ const ChatApp = (receiver) => {
                         if (response.data) {
                           // Add the new group to channels
                           const newGroup = response.data
-
-                          // Store the created group in localStorage
-                          const existingGroups = JSON.parse(localStorage.getItem("userGroups") || "[]")
-                          localStorage.setItem("userGroups", JSON.stringify([...existingGroups, newGroup]))
 
                           setChannels((prev) => [...prev, newGroup])
                           // Select the new group
@@ -815,8 +966,8 @@ const ChatApp = (receiver) => {
                           setGroupName("")
                         }
                       } catch (error) {
-                        console.error("Error creating group:", error)
-                        alert("Failed to create group. Please try again.")
+                        console.error("Error creating group:", error.response?.data?.msg || error.message)
+                        alert(error.response?.data?.msg || "Failed to create group. Please try again.")
                       }
                     }}
                   >
@@ -995,7 +1146,7 @@ const ChatApp = (receiver) => {
                   {selectedChannel && selectedChannel.isGroup && (
                     <div
                       id="group-info-popup"
-                      className="hidden absolute right-0 top-8 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg z-50 w-64"
+                      className="hidden absolute right-0 top-8 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg z-50 w-80"
                     >
                       <div className="text-gray-800 dark:text-gray-200">
                         <h3 className="font-bold text-lg mb-2">Group Info</h3>
@@ -1003,38 +1154,134 @@ const ChatApp = (receiver) => {
                           <span className="font-semibold">Group Name:</span> {selectedChannel.username}
                         </p>
                         <div className="mb-2">
-                          <span className="font-semibold">Members:</span>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-semibold">
+                              Members ({selectedChannel.members ? selectedChannel.members.length : 0}):
+                            </span>
+                            {selectedChannel.createdBy === userId && (
+                              <button
+                                onClick={() => {
+                                  setGroupToAddMembers(selectedChannel)
+                                  setIsAddMembersMode(true)
+                                  document.getElementById("group-info-popup").classList.add("hidden")
+                                }}
+                                className="text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
+                              >
+                                <UserPlusIcon className="h-3 w-3 mr-1" />
+                                Add
+                              </button>
+                            )}
+                          </div>
                           <div className="mt-2 max-h-40 overflow-y-auto">
-                            {selectedChannel.members &&
+                            {selectedChannel.members && selectedChannel.members.length > 0 ? (
                               selectedChannel.members.map((memberId) => {
                                 const member = channels.find((c) => c._id === memberId)
                                 return member ? (
-                                  <div key={memberId} className="flex items-center py-1">
-                                    <div
-                                      className="h-6 w-6 rounded-full flex items-center justify-center text-white font-bold mr-2"
-                                      style={{ backgroundColor: generateAvatar(member.username).backgroundColor }}
-                                    >
-                                      {generateAvatar(member.username).initial}
+                                  <div
+                                    key={memberId}
+                                    className="flex items-center justify-between py-1 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600"
+                                    onClick={() => {
+                                      if (
+                                        selectedChannel.createdBy === userId &&
+                                        memberId !== userId &&
+                                        memberId !== selectedChannel.createdBy
+                                      ) {
+                                        if (
+                                          window.confirm(`Remove ${member?.username || "this member"} from the group?`)
+                                        ) {
+                                          handleRemoveMemberFromGroup(selectedChannel._id, memberId)
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center">
+                                      <div
+                                        className="h-6 w-6 rounded-full flex items-center justify-center text-white font-bold mr-2"
+                                        style={{
+                                          backgroundColor: generateAvatar(member?.username || "?").backgroundColor,
+                                        }}
+                                      >
+                                        {generateAvatar(member?.username || "?").initial}
+                                      </div>
+                                      <span>{member?.username || "Unknown member"}</span>
+                                      {memberId === selectedChannel.createdBy && (
+                                        <span className="ml-2 text-xs bg-gray-200 dark:bg-gray-600 px-1 rounded">
+                                          Admin
+                                        </span>
+                                      )}
                                     </div>
-                                    <span>{member.username}</span>
+                                    {/* Show remove button for all members except the admin and current user if current user is admin */}
+                                    {selectedChannel.createdBy === userId &&
+                                      memberId !== userId &&
+                                      memberId !== selectedChannel.createdBy && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (
+                                              window.confirm(
+                                                `Remove ${member?.username || "this member"} from the group?`,
+                                              )
+                                            ) {
+                                              handleRemoveMemberFromGroup(selectedChannel._id, memberId)
+                                            }
+                                          }}
+                                          className="text-red-500 hover:text-red-700"
+                                        >
+                                          <TrashIcon className="h-4 w-4" />
+                                          <span className="ml-1 text-xs">Remove member</span>
+                                        </button>
+                                      )}
                                   </div>
-                                ) : null
-                              })}
+                                ) : (
+                                  <div key={memberId} className="py-1 border-b border-gray-200 dark:border-gray-700">
+                                    <span className="text-gray-500">Unknown member</span>
+                                  </div>
+                                )
+                              })
+                            ) : (
+                              <div className="py-1 text-gray-500">No members found</div>
+                            )}
                           </div>
                         </div>
-                        <button
-                          onClick={() => {
-                            if (selectedChannel && selectedChannel.isGroup) {
-                              setGroupToAddMembers(selectedChannel)
-                              setIsAddMembersMode(true)
-                              document.getElementById("group-info-popup").classList.add("hidden")
-                            }
-                          }}
-                          className="mt-2 w-full px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center"
-                        >
-                          <UserPlusIcon className="h-4 w-4 mr-1" />
-                          Add Members
-                        </button>
+                        <div className="mt-4 flex justify-between">
+                          <button
+                            onClick={() => {
+                              if (selectedChannel && selectedChannel.isGroup) {
+                                setGroupToAddMembers(selectedChannel)
+                                setIsAddMembersMode(true)
+                                document.getElementById("group-info-popup").classList.add("hidden")
+                              }
+                            }}
+                            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center justify-center"
+                          >
+                            <UserPlusIcon className="h-4 w-4 mr-1" />
+                            Add Members
+                          </button>
+
+                          {userId !== selectedChannel.createdBy && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm("Are you sure you want to exit this group?")) {
+                                  handleRemoveMemberFromGroup(selectedChannel._id, userId)
+                                }
+                              }}
+                              className="px-3 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 flex items-center justify-center"
+                            >
+                              <ArrowUpOnSquareIcon className="h-4 w-4 mr-1" />
+                              Exit Group
+                            </button>
+                          )}
+
+                          {selectedChannel.createdBy === userId && (
+                            <button
+                              onClick={() => handleDeleteGroup(selectedChannel._id)}
+                              className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 flex items-center justify-center"
+                            >
+                              <TrashIcon className="h-4 w-4 mr-1" />
+                              Delete Group
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
